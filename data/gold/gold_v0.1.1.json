@@ -1,0 +1,558 @@
+{
+  "version": "0.1.1",
+  "queries": [
+    {
+      "id": "q001",
+      "query": "diabetes",
+      "query_type": "simple",
+      "expected_systems": [
+        "ICD10CM"
+      ],
+      "expected_codes": {
+        "ICD10CM": [
+          "E11.9",
+          "E10.9"
+        ]
+      },
+      "must_include": [],
+      "must_not_include": [],
+      "notes": "Type 2 diabetes (E11.9) is the most common variant; should rank top."
+    },
+    {
+      "id": "q002",
+      "query": "hypertension",
+      "query_type": "simple",
+      "expected_systems": [
+        "ICD10CM"
+      ],
+      "expected_codes": {
+        "ICD10CM": [
+          "I10"
+        ]
+      },
+      "must_include": [
+        "I10"
+      ],
+      "must_not_include": [],
+      "notes": "Essential hypertension is canonical I10. Watch for HPO false positive."
+    },
+    {
+      "id": "q003",
+      "query": "asthma",
+      "query_type": "simple",
+      "expected_systems": [
+        "ICD10CM"
+      ],
+      "expected_codes": {
+        "ICD10CM": [
+          "J45.998"
+        ]
+      },
+      "must_include": [],
+      "must_not_include": [],
+      "notes": "J45.x family. Top result depends on Clinical Tables ranking."
+    },
+    {
+      "id": "q004",
+      "query": "glucose test",
+      "query_type": "simple",
+      "expected_systems": [
+        "LOINC"
+      ],
+      "expected_codes": {
+        "LOINC": [
+          "62856-0"
+        ]
+      },
+      "must_include": [],
+      "must_not_include": [],
+      "notes": "2345-7 = Glucose [Mass/volume] in Serum/Plasma. Verify code in Phase 1."
+    },
+    {
+      "id": "q005",
+      "query": "hemoglobin a1c",
+      "query_type": "simple",
+      "expected_systems": [
+        "LOINC"
+      ],
+      "expected_codes": {
+        "LOINC": [
+          "4548-4"
+        ]
+      },
+      "must_include": [
+        "4548-4"
+      ],
+      "must_not_include": [],
+      "notes": "HbA1c is canonically 4548-4. Strict must-include \u2014 strong signal of LOINC accuracy."
+    },
+    {
+      "id": "q006",
+      "query": "metformin 500 mg",
+      "query_type": "simple",
+      "expected_systems": [
+        "RXNORM"
+      ],
+      "expected_codes": {
+        "RXNORM": [
+          "860975"
+        ]
+      },
+      "must_include": [],
+      "must_not_include": [],
+      "notes": "Specific strength \u2014 RxNorm should match exactly. Watch: '500 mg' should NOT cause UCUM to be selected. If UCUM appears in selected_systems, that's a planner bug."
+    },
+    {
+      "id": "q007",
+      "query": "lisinopril 20 mg",
+      "query_type": "simple",
+      "expected_systems": [
+        "RXNORM"
+      ],
+      "expected_codes": {
+        "RXNORM": [
+          "314077"
+        ]
+      },
+      "must_include": [],
+      "must_not_include": [],
+      "notes": "Common ACE inhibitor. Same UCUM-false-positive guard as q006."
+    },
+    {
+      "id": "q008",
+      "query": "wheelchair",
+      "query_type": "simple",
+      "expected_systems": [
+        "HCPCS"
+      ],
+      "expected_codes": {
+        "HCPCS": [
+          "E2210",
+          "K0001"
+        ]
+      },
+      "must_include": [],
+      "must_not_include": [],
+      "notes": "Manual wheelchairs E1130/K0001. Standard HCPCS happy-path."
+    },
+    {
+      "id": "q009",
+      "query": "CPAP machine",
+      "query_type": "simple",
+      "expected_systems": [
+        "HCPCS"
+      ],
+      "expected_codes": {
+        "HCPCS": [
+          "E0601"
+        ]
+      },
+      "must_include": [],
+      "must_not_include": [],
+      "notes": "Durable medical equipment. Tests HCPCS on a different equipment class than wheelchair. Watch: ICD-10 (sleep apnea G47.33) is a borderline addition \u2014 defensible but not required."
+    },
+    {
+      "id": "q010",
+      "query": "mg/dL",
+      "query_type": "simple",
+      "expected_systems": [
+        "UCUM"
+      ],
+      "expected_codes": {
+        "UCUM": [
+          "mg/dL"
+        ]
+      },
+      "must_include": [
+        "mg/dL"
+      ],
+      "must_not_include": [],
+      "notes": "Unit literal in isolation \u2014 must trigger UCUM only. If ICD-10 or LOINC fire on this, the planner is over-eager."
+    },
+    {
+      "id": "q011",
+      "query": "ataxia",
+      "query_type": "simple",
+      "expected_systems": [
+        "HPO"
+      ],
+      "expected_codes": {
+        "HPO": [
+          "HP:0001251"
+        ]
+      },
+      "must_include": [
+        "HP:0001251"
+      ],
+      "must_not_include": [],
+      "notes": "Phenotypic trait \u2014 HPO is canonical. ICD-10 also has ataxia codes (R27.0, G11.x); selecting them too is borderline. Check planner behavior here for HPO/ICD-10 confusion-pair calibration."
+    },
+    {
+      "id": "q012",
+      "query": "diabetes medication",
+      "query_type": "multi_system",
+      "expected_systems": [
+        "ICD10CM",
+        "RXNORM"
+      ],
+      "expected_codes": {
+        "ICD10CM": [
+          "E11.9"
+        ],
+        "RXNORM": [
+          "860975",
+          "6809"
+        ]
+      },
+      "must_include": [],
+      "must_not_include": [],
+      "notes": "Condition + treatment. Planner must select both. Classic 2-system test."
+    },
+    {
+      "id": "q013",
+      "query": "tuberculosis treatment",
+      "query_type": "multi_system",
+      "expected_systems": [
+        "ICD10CM",
+        "RXNORM"
+      ],
+      "expected_codes": {
+        "ICD10CM": [
+          "A15.9"
+        ],
+        "RXNORM": [
+          "7407"
+        ]
+      },
+      "must_include": [],
+      "must_not_include": [],
+      "notes": "Same shape as q011 with a different domain \u2014 guards against domain over-fit."
+    },
+    {
+      "id": "q014",
+      "query": "COVID-19 test",
+      "query_type": "multi_system",
+      "expected_systems": [
+        "ICD10CM",
+        "LOINC"
+      ],
+      "expected_codes": {
+        "ICD10CM": [
+          "U07.1",
+          "Z11.52"
+        ],
+        "LOINC": [
+          "98732-1"
+        ]
+      },
+      "must_include": [],
+      "must_not_include": [],
+      "notes": "Disease + diagnostic test pairing. Tests ICD+LOINC cooperation."
+    },
+    {
+      "id": "q015",
+      "query": "asthma inhaler",
+      "query_type": "multi_system",
+      "expected_systems": [
+        "ICD10CM",
+        "RXNORM"
+      ],
+      "expected_codes": {
+        "ICD10CM": [
+          "J45.9"
+        ],
+        "RXNORM": [
+          "745679"
+        ]
+      },
+      "must_include": [],
+      "must_not_include": [],
+      "notes": "RxNorm primary; HCPCS for spacers/nebulizers is borderline. If planner adds HCPCS, it's defensible \u2014 log but don't penalize."
+    },
+    {
+      "id": "q016",
+      "query": "anemia workup",
+      "query_type": "multi_system",
+      "expected_systems": [
+        "ICD10CM",
+        "LOINC"
+      ],
+      "expected_codes": {
+        "ICD10CM": [
+          "D64.9"
+        ],
+        "LOINC": [
+          "718-7",
+          "789-8"
+        ]
+      },
+      "must_include": [],
+      "must_not_include": [],
+      "notes": "Condition + battery of labs. Tests planner's ability to expand to 'workup'."
+    },
+    {
+      "id": "q017",
+      "query": "hypertension management",
+      "query_type": "multi_system",
+      "expected_systems": [
+        "ICD10CM",
+        "LOINC",
+        "RXNORM"
+      ],
+      "expected_codes": {
+        "ICD10CM": [
+          "I10"
+        ],
+        "LOINC": [
+          "34860-7"
+        ],
+        "RXNORM": [
+          "314077"
+        ]
+      },
+      "must_include": [],
+      "must_not_include": [],
+      "notes": "3-system test: condition + monitoring + treatment."
+    },
+    {
+      "id": "q018",
+      "query": "diabetes management",
+      "query_type": "multi_system",
+      "expected_systems": [
+        "ICD10CM",
+        "LOINC",
+        "RXNORM",
+        "HCPCS"
+      ],
+      "expected_codes": {
+        "ICD10CM": [
+          "E11.9"
+        ],
+        "LOINC": [
+          "38944-5"
+        ],
+        "RXNORM": [
+          "860975",
+          "6809"
+        ],
+        "HCPCS": [
+          "G0108"
+        ]
+      },
+      "must_include": [],
+      "must_not_include": [],
+      "notes": "EDGE CASE: legitimately wants 4 systems. Tests soft-cap behavior. If planner consistently truncates to 3, the soft-cap prompt is too strict."
+    },
+    {
+      "id": "q019",
+      "query": "cholesterol panel",
+      "query_type": "multi_system",
+      "expected_systems": [
+        "LOINC"
+      ],
+      "expected_codes": {
+        "LOINC": [
+          "94872-9"
+        ]
+      },
+      "must_include": [],
+      "must_not_include": [],
+      "notes": "Tricky single-system case despite sounding multi. Planner might add ICD-10 (hyperlipidemia) \u2014 borderline acceptable but not necessary. Use this to calibrate planner's restraint."
+    },
+    {
+      "id": "q020",
+      "query": "blood sugar test",
+      "query_type": "ambiguous",
+      "expected_systems": [
+        "LOINC"
+      ],
+      "expected_codes": {
+        "LOINC": [
+          "13534-3"
+        ]
+      },
+      "must_include": [],
+      "must_not_include": [],
+      "notes": "Confusion pair: LOINC vs ICD-10 (hyperglycemia). 'test' should anchor to LOINC. Penalize if planner fans out to 3+."
+    },
+    {
+      "id": "q021",
+      "query": "high blood pressure",
+      "query_type": "ambiguous",
+      "expected_systems": [
+        "ICD10CM"
+      ],
+      "expected_codes": {
+        "ICD10CM": [
+          "I10"
+        ]
+      },
+      "must_include": [],
+      "must_not_include": [],
+      "notes": "Confusion pair: ICD-10 vs HPO. Conventional answer is ICD-10. HPO has hypertension as phenotype but it's not the primary route."
+    },
+    {
+      "id": "q022",
+      "query": "tremor",
+      "query_type": "ambiguous",
+      "expected_systems": [
+        "HPO",
+        "ICD10CM"
+      ],
+      "expected_codes": {
+        "HPO": [
+          "HP:0001337"
+        ],
+        "ICD10CM": [
+          "R25.1",
+          "G25.0"
+        ]
+      },
+      "must_include": [],
+      "must_not_include": [],
+      "notes": "Both systems are legitimate. Tests whether planner handles phenotype-vs-finding overlap by selecting both rather than picking one."
+    },
+    {
+      "id": "q023",
+      "query": "fever",
+      "query_type": "ambiguous",
+      "expected_systems": [
+        "HPO",
+        "ICD10CM"
+      ],
+      "expected_codes": {
+        "HPO": [
+          "HP:0001945"
+        ],
+        "ICD10CM": [
+          "R50.9"
+        ]
+      },
+      "must_include": [],
+      "must_not_include": [],
+      "notes": "Symptom that lives in both HPO and ICD-10. Same shape as q021."
+    },
+    {
+      "id": "q024",
+      "query": "insulin",
+      "query_type": "ambiguous",
+      "expected_systems": [
+        "RXNORM"
+      ],
+      "expected_codes": {
+        "RXNORM": [
+          "847230"
+        ]
+      },
+      "must_include": [],
+      "must_not_include": [],
+      "notes": "RxNorm is primary. HCPCS has insulin pumps (E0784) \u2014 defensible to add but not required. Watch: no ICD-10 (diabetes) \u2014 the query is about the substance, not the condition."
+    },
+    {
+      "id": "q025",
+      "query": "hearing loss",
+      "query_type": "ambiguous",
+      "expected_systems": [
+        "ICD10CM",
+        "HPO"
+      ],
+      "expected_codes": {
+        "ICD10CM": [
+          "H91.90"
+        ],
+        "HPO": [
+          "HP:0000365"
+        ]
+      },
+      "must_include": [],
+      "must_not_include": [],
+      "notes": "Both legitimate. HCPCS for hearing aids (V5xxx) is over-reach for this query since the query is about the condition, not equipment."
+    },
+    {
+      "id": "q026",
+      "query": "muscle weakness",
+      "query_type": "ambiguous",
+      "expected_systems": [
+        "HPO",
+        "ICD10CM"
+      ],
+      "expected_codes": {
+        "HPO": [
+          "HP:0001324"
+        ],
+        "ICD10CM": [
+          "M62.81"
+        ]
+      },
+      "must_include": [],
+      "must_not_include": [],
+      "notes": "Same HPO/ICD-10 confusion pair, different domain. Tests consistency."
+    },
+    {
+      "id": "q027",
+      "query": "shortness of breath",
+      "query_type": "ambiguous",
+      "expected_systems": [
+        "HPO",
+        "ICD10CM"
+      ],
+      "expected_codes": {
+        "HPO": [
+          "HP:0002094"
+        ],
+        "ICD10CM": [
+          "R06.02"
+        ]
+      },
+      "must_include": [],
+      "must_not_include": [],
+      "notes": "HPO/ICD-10 confusion pair, third domain. Three of these gives stable signal."
+    },
+    {
+      "id": "q028",
+      "query": "sugar test",
+      "query_type": "refinement",
+      "expected_systems": [
+        "LOINC"
+      ],
+      "expected_codes": {
+        "LOINC": [
+          "76133-8"
+        ]
+      },
+      "must_include": [],
+      "must_not_include": [],
+      "notes": "Deliberately vague. Planner's first pass with search term 'sugar' likely returns weak/empty LOINC results. Refinement should retry with 'glucose' and recover. If mean iterations on this query is 1.0, the evaluator isn't triggering refinement when it should."
+    },
+    {
+      "id": "q029",
+      "query": "asdfghjkl",
+      "query_type": "miss",
+      "expected_systems": [],
+      "expected_codes": {},
+      "must_include": [],
+      "must_not_include": [],
+      "notes": "Pure gibberish. Planner should select no systems and the agent should return empty."
+    },
+    {
+      "id": "q030",
+      "query": "weather forecast",
+      "query_type": "miss",
+      "expected_systems": [],
+      "expected_codes": {},
+      "must_include": [],
+      "must_not_include": [],
+      "notes": "Coherent English, non-clinical. Tests planner's domain boundary."
+    },
+    {
+      "id": "q031",
+      "query": "how do I make pasta",
+      "query_type": "miss",
+      "expected_systems": [],
+      "expected_codes": {},
+      "must_include": [],
+      "must_not_include": [],
+      "notes": "Question-shaped non-clinical query. Distinct miss pattern from q029."
+    }
+  ]
+}

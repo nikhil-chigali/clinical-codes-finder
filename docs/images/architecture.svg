@@ -1,0 +1,125 @@
+<svg viewBox="0 0 880 820" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, -apple-system, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5"
+            markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#475569"/>
+    </marker>
+    <marker id="arrow-loop" viewBox="0 0 10 10" refX="9" refY="5"
+            markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#ea580c"/>
+    </marker>
+  </defs>
+
+  <!-- Title -->
+  <text x="440" y="30" text-anchor="middle" font-size="18" font-weight="600" fill="#0f172a">
+    Clinical Codes Finder — Agent Architecture
+  </text>
+
+  <!-- Legend -->
+  <g transform="translate(700, 685)" font-size="11">
+    <text x="0" y="0" font-weight="600" fill="#0f172a">Legend</text>
+    <rect x="0" y="10" width="14" height="14" rx="3" fill="#dbeafe" stroke="#1e40af"/>
+    <text x="22" y="22" fill="#0f172a">LLM node</text>
+    <rect x="0" y="32" width="14" height="14" rx="3" fill="#ede9fe" stroke="#6d28d9"/>
+    <text x="22" y="44" fill="#0f172a">Async executor</text>
+    <rect x="0" y="54" width="14" height="14" rx="3" fill="#dcfce7" stroke="#166534"/>
+    <text x="22" y="66" fill="#0f172a">External API</text>
+    <rect x="0" y="76" width="14" height="14" rx="3" fill="#f1f5f9" stroke="#475569"/>
+    <text x="22" y="88" fill="#0f172a">Deterministic</text>
+    <line x1="0" y1="105" x2="14" y2="105" stroke="#ea580c" stroke-width="1.5" stroke-dasharray="4 3"/>
+    <text x="22" y="109" fill="#0f172a">Refinement loop</text>
+  </g>
+
+  <!-- User Query -->
+  <rect x="340" y="60" width="200" height="44" rx="22" fill="#f1f5f9" stroke="#475569" stroke-width="1.5"/>
+  <text x="440" y="88" text-anchor="middle" font-size="14" fill="#0f172a">User Query</text>
+  <line x1="440" y1="104" x2="440" y2="135" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- planner (merged: systems + search terms) -->
+  <rect x="270" y="140" width="340" height="72" rx="8" fill="#dbeafe" stroke="#1e40af" stroke-width="1.5"/>
+  <text x="440" y="165" text-anchor="middle" font-size="14" font-weight="600" fill="#1e3a8a">planner</text>
+  <text x="440" y="184" text-anchor="middle" font-size="11" fill="#1e3a8a">LLM • picks systems AND search terms jointly</text>
+  <text x="440" y="200" text-anchor="middle" font-size="11" font-style="italic" fill="#1e3a8a">re-entered on refinement with prior attempt as context</text>
+  <line x1="440" y1="212" x2="440" y2="245" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- executor -->
+  <rect x="290" y="250" width="300" height="60" rx="8" fill="#ede9fe" stroke="#6d28d9" stroke-width="1.5"/>
+  <text x="440" y="273" text-anchor="middle" font-size="14" font-weight="600" fill="#5b21b6">executor</text>
+  <text x="440" y="293" text-anchor="middle" font-size="11" fill="#5b21b6">async fan-out to selected tools only</text>
+
+  <!-- Tool boxes -->
+  <g font-size="11" font-weight="600" fill="#166534">
+    <rect x="40"  y="355" width="110" height="42" rx="6" fill="#dcfce7" stroke="#166534" stroke-width="1.5"/>
+    <text x="95"  y="381" text-anchor="middle">ICD-10-CM</text>
+
+    <rect x="175" y="355" width="110" height="42" rx="6" fill="#dcfce7" stroke="#166534" stroke-width="1.5"/>
+    <text x="230" y="381" text-anchor="middle">LOINC</text>
+
+    <rect x="310" y="355" width="110" height="42" rx="6" fill="#dcfce7" stroke="#166534" stroke-width="1.5"/>
+    <text x="365" y="381" text-anchor="middle">RxNorm</text>
+
+    <rect x="445" y="355" width="110" height="42" rx="6" fill="#dcfce7" stroke="#166534" stroke-width="1.5"/>
+    <text x="500" y="381" text-anchor="middle">HCPCS</text>
+
+    <rect x="580" y="355" width="110" height="42" rx="6" fill="#dcfce7" stroke="#166534" stroke-width="1.5"/>
+    <text x="635" y="381" text-anchor="middle">UCUM</text>
+
+    <rect x="715" y="355" width="110" height="42" rx="6" fill="#dcfce7" stroke="#166534" stroke-width="1.5"/>
+    <text x="770" y="381" text-anchor="middle">HPO</text>
+  </g>
+
+  <!-- Fan-out arrows -->
+  <g stroke="#475569" stroke-width="1.2" fill="none">
+    <line x1="440" y1="310" x2="95"  y2="355" marker-end="url(#arrow)"/>
+    <line x1="440" y1="310" x2="230" y2="355" marker-end="url(#arrow)"/>
+    <line x1="440" y1="310" x2="365" y2="355" marker-end="url(#arrow)"/>
+    <line x1="440" y1="310" x2="500" y2="355" marker-end="url(#arrow)"/>
+    <line x1="440" y1="310" x2="635" y2="355" marker-end="url(#arrow)"/>
+    <line x1="440" y1="310" x2="770" y2="355" marker-end="url(#arrow)"/>
+  </g>
+
+  <!-- Fan-in arrows -->
+  <g stroke="#475569" stroke-width="1.2" fill="none">
+    <line x1="95"  y1="397" x2="440" y2="450" marker-end="url(#arrow)"/>
+    <line x1="230" y1="397" x2="440" y2="450" marker-end="url(#arrow)"/>
+    <line x1="365" y1="397" x2="440" y2="450" marker-end="url(#arrow)"/>
+    <line x1="500" y1="397" x2="440" y2="450" marker-end="url(#arrow)"/>
+    <line x1="635" y1="397" x2="440" y2="450" marker-end="url(#arrow)"/>
+    <line x1="770" y1="397" x2="440" y2="450" marker-end="url(#arrow)"/>
+  </g>
+
+  <!-- evaluator -->
+  <rect x="290" y="450" width="300" height="60" rx="8" fill="#dbeafe" stroke="#1e40af" stroke-width="1.5"/>
+  <text x="440" y="473" text-anchor="middle" font-size="14" font-weight="600" fill="#1e3a8a">evaluator</text>
+  <text x="440" y="493" text-anchor="middle" font-size="11" fill="#1e3a8a">LLM • sufficient? refine? (max 2 iters)</text>
+
+  <!-- Refinement loop: evaluator -> planner -->
+  <path d="M 290 480 L 200 480 L 200 175 L 270 175"
+        stroke="#ea580c" stroke-width="1.5" stroke-dasharray="6 4"
+        fill="none" stroke-linejoin="round"
+        marker-end="url(#arrow-loop)"/>
+  <text x="200" y="160" text-anchor="middle" font-size="11" font-style="italic" fill="#9a3412">refine</text>
+  <text x="200" y="325" text-anchor="middle" font-size="10" fill="#9a3412">carries prior</text>
+  <text x="200" y="338" text-anchor="middle" font-size="10" fill="#9a3412">attempt as</text>
+  <text x="200" y="351" text-anchor="middle" font-size="10" fill="#9a3412">context</text>
+
+  <!-- Sufficient path -->
+  <line x1="440" y1="510" x2="440" y2="540" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="468" y="530" font-size="11" font-style="italic" fill="#475569">sufficient</text>
+
+  <!-- consolidator -->
+  <rect x="290" y="545" width="300" height="60" rx="8" fill="#f1f5f9" stroke="#475569" stroke-width="1.5"/>
+  <text x="440" y="568" text-anchor="middle" font-size="14" font-weight="600" fill="#0f172a">consolidator</text>
+  <text x="440" y="588" text-anchor="middle" font-size="11" fill="#0f172a">deterministic • dedup, group, rank</text>
+  <line x1="440" y1="605" x2="440" y2="635" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- summarizer -->
+  <rect x="290" y="640" width="300" height="60" rx="8" fill="#dbeafe" stroke="#1e40af" stroke-width="1.5"/>
+  <text x="440" y="663" text-anchor="middle" font-size="14" font-weight="600" fill="#1e3a8a">summarizer</text>
+  <text x="440" y="683" text-anchor="middle" font-size="11" fill="#1e3a8a">LLM • plain-English explanation</text>
+  <line x1="440" y1="700" x2="440" y2="730" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Response -->
+  <rect x="320" y="735" width="240" height="44" rx="22" fill="#f1f5f9" stroke="#475569" stroke-width="1.5"/>
+  <text x="440" y="763" text-anchor="middle" font-size="14" fill="#0f172a">Response (codes + summary)</text>
+</svg>
