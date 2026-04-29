@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     fetch_results: int = 10   # results fetched per system per executor call
     display_results: int = 5  # results kept in the final consolidated response
 
-    confidence_threshold: float = 0.5  # consolidator score floor — evaluator uses semantic judgment, not this threshold
+    confidence_threshold: float = 0.5  # consolidator score floor (reserved) — evaluator uses semantic judgment, not this threshold
 
 
 settings = Settings()
