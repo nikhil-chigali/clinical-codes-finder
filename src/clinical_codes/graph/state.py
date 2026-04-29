@@ -11,3 +11,9 @@ class PlannerOutput(BaseModel):
     selected_systems: list[SystemName]
     search_terms: dict[SystemName, str]
     rationale: str
+
+
+class EvaluatorOutput(BaseModel):
+    decision: Literal["sufficient", "refine"]
+    weak_systems: list[SystemName]
+    feedback: str
