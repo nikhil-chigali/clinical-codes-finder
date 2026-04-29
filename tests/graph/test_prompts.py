@@ -40,6 +40,7 @@ def _attempt(iteration: int = 0) -> Attempt:
 def test_system_catalog_complete() -> None:
     from clinical_codes.graph.prompts import SYSTEM_CATALOG
 
+    assert len(SYSTEM_CATALOG) == len(SystemName), "catalog size must equal number of SystemName members"
     for system in SystemName:
         assert system in SYSTEM_CATALOG, f"{system} missing from SYSTEM_CATALOG"
         assert SYSTEM_CATALOG[system], f"{system} has empty description"
