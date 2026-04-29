@@ -73,3 +73,7 @@ tests/                 # mirrors src/ layout
 - Mean API calls/query (cost proxy)
 
 Sliced by query type: `simple`, `multi_system`, `ambiguous`, `miss`.
+
+## Notes
+
+- `langsmith` appears in pytest plugin output — it's a transitive dep of `langchain-anthropic`, not explicitly installed

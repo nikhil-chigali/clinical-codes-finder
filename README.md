@@ -32,7 +32,7 @@ The pipeline is a LangGraph state machine. At its core is a tight **Planner → 
 The instinct on agent assignments is to reach for ReAct (think → act → observe in a loop with one LLM). I deliberately chose **Plan-and-Execute with parallel fan-out and a bounded refinement loop** instead:
 
 - **The 6 coding systems are independent.** A search in LOINC has no bearing on a search in HCPCS. ReAct would needlessly serialize them, wasting latency and tokens on coordination the task doesn't need.
-- **Most queries resolve in one pass.** The evaluator only triggers refinement when results are empty or all fall below a confidence floor — not on every query. This keeps the median path cheap.
+- **Most queries resolve in one pass.** The evaluator only triggers refinement when results are empty or semantically irrelevant to the query — not on every query. This keeps the median path cheap.
 - **Per-system fan-out gives clean traces.** Each tool call is a separate observable unit, easier to debug and evaluate than a single agent juggling 6 tools through one prompt.
 - **The loop is bounded (max 2 iterations).** Unbounded refinement is where agents go to die. The cap is enforced in graph state, not prompted into the LLM.
 
@@ -63,7 +63,7 @@ Full trade-off analysis in [`docs/design-decisions.md`](docs/design-decisions.md
 ```bash
 git clone <repo-url> && cd clinical-codes-finder
 uv sync                    # or: pip install -e .
-cp .env.example .env       # add OPENAI_API_KEY
+cp .env.example .env       # add ANTHROPIC_API_KEY
 ```
 
 ## Usage
@@ -80,14 +80,14 @@ uv run streamlit run src/clinical_codes/app/streamlit_app.py
 
 **Run the eval:**
 ```bash
-uv run python -m scripts.run_eval --gold data/gold/gold_v0.1.0.json
+uv run python -m scripts.run_eval --gold data/gold/gold_v0.1.1.json
 ```
 
 ---
 
 ## Evaluation
 
-The system is evaluated against a hand-curated gold set (`data/gold/gold_v0.1.0.json`) of N queries spanning four difficulty types: **simple** (one system, unambiguous), **multi-system** (legitimately spans 2+ systems), **ambiguous** (planner judgment call), and **miss** (out-of-scope / gibberish — agent should return empty).
+The system is evaluated against a hand-curated gold set (`data/gold/gold_v0.1.1.json`) of N queries spanning four difficulty types: **simple** (one system, unambiguous), **multi-system** (legitimately spans 2+ systems), **ambiguous** (planner judgment call), and **miss** (out-of-scope / gibberish — agent should return empty).
 
 | Metric | Value | What it measures |
 |---|---|---|
