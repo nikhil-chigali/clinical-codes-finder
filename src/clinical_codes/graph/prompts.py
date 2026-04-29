@@ -72,6 +72,8 @@ def build_evaluator_messages(
     planner_output: PlannerOutput,
     raw_results: dict[SystemName, list[CodeResult]],
 ) -> list[BaseMessage]:
+    # search_terms is the authoritative source for iteration — it covers every system
+    # the planner selected AND has a term for, which is what the executor will query.
     result_lines: list[str] = []
     for system, term in planner_output.search_terms.items():
         results = raw_results.get(system, [])[:5]

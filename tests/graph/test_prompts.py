@@ -91,6 +91,7 @@ def test_build_evaluator_messages() -> None:
     assert len(messages) == 2
     assert isinstance(messages[0], SystemMessage)
     assert isinstance(messages[1], HumanMessage)
+    assert "clinical code quality evaluator" in messages[0].content
     human = messages[1].content
     assert "hypertension" in human
     assert "Essential (primary) hypertension" in human
@@ -101,6 +102,7 @@ def test_evaluator_empty_results() -> None:
 
     messages = build_evaluator_messages("hypertension", _planner_output(), {})
     assert "(no results)" in messages[1].content
+    assert "ICD10CM" in messages[1].content
 
 
 def test_evaluator_truncates_to_five() -> None:
