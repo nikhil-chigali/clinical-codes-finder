@@ -35,3 +35,11 @@ class GraphState(TypedDict):
     attempt_history: Annotated[list[Attempt], operator.add]
     consolidated: dict[SystemName, list[CodeResult]]
     summary: str
+
+
+def route_after_evaluator(state: GraphState) -> str:
+    if state["iteration"] >= MAX_ITERATIONS:
+        return "consolidator"
+    if state["evaluator_output"].decision == "refine":
+        return "planner"
+    return "consolidator"
