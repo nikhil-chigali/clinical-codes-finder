@@ -12,9 +12,46 @@ SYSTEM_CATALOG: dict[SystemName, str] = {
     SystemName.HPO:     "Human phenotype terms. Use for genetic traits, rare disease features, and clinical phenotypes.",
 }
 
+_CATALOG_LINES = "\n".join(
+    f"  {name}: {desc}" for name, desc in SYSTEM_CATALOG.items()
+)
+
+_PLANNER_SYSTEM = f"""You are a clinical coding specialist. Given a natural-language clinical query, select the most relevant medical coding systems and generate a precise search term for each.
+
+Available systems:
+{_CATALOG_LINES}
+
+Selection rules:
+- Select 1–3 systems. Select more only when the query genuinely spans multiple clinical domains.
+- Generate exactly one search term per selected system.
+- Use standardized clinical vocabulary — prefer terms the NLM Clinical Tables API recognizes over colloquial or abbreviated forms.
+
+On refinement:
+- You will receive the prior attempt's search terms, weak systems, and the evaluator's diagnosis.
+- Based on the diagnosis, you may: retry a weak system with a different search term, drop a weak system that does not cover this query type, or add a system not in the original selection if the diagnosis suggests the query spans a different domain.
+- Systems that returned strong results do not need to be re-queried; omit them from search_terms."""
+
 
 def build_planner_messages(query: str, attempt_history: list[Attempt]) -> list[BaseMessage]:
-    raise NotImplementedError
+    if not attempt_history:
+        human = f"Query: {query}"
+    else:
+        last = attempt_history[-1]
+        terms_str = "\n".join(
+            f"    {system}: \"{term}\""
+            for system, term in last.planner_output.search_terms.items()
+        )
+        weak_str = ", ".join(str(s) for s in last.evaluator_output.weak_systems) or "none"
+        human = (
+            f"Query: {query}\n\n"
+            f"Prior attempt:\n"
+            f"  Systems queried:\n{terms_str}\n"
+            f"  Weak systems: {weak_str}\n"
+            f"  Evaluator feedback: {last.evaluator_output.feedback}\n\n"
+            f"Revise your system selection and/or search terms based on the evaluator's feedback.\n"
+            f"Systems that returned strong results do not need to be re-queried."
+        )
+    return [SystemMessage(content=_PLANNER_SYSTEM), HumanMessage(content=human)]
 
 
 def build_evaluator_messages(

@@ -44,3 +44,30 @@ def test_system_catalog_complete() -> None:
     for system in SystemName:
         assert system in SYSTEM_CATALOG, f"{system} missing from SYSTEM_CATALOG"
         assert SYSTEM_CATALOG[system], f"{system} has empty description"
+
+
+def test_build_planner_first_pass() -> None:
+    from langchain_core.messages import HumanMessage, SystemMessage
+    from clinical_codes.graph.prompts import build_planner_messages
+
+    messages = build_planner_messages("hypertension", [])
+
+    assert len(messages) == 2
+    assert isinstance(messages[0], SystemMessage)
+    assert isinstance(messages[1], HumanMessage)
+    human = messages[1].content
+    assert "hypertension" in human
+    assert "Prior attempt" not in human
+
+
+def test_build_planner_refinement() -> None:
+    from langchain_core.messages import HumanMessage
+    from clinical_codes.graph.prompts import build_planner_messages
+
+    messages = build_planner_messages("hypertension", [_attempt()])
+
+    human = messages[1].content
+    assert "Prior attempt" in human
+    assert "hypertension" in human
+    assert "LOINC returned no results for this drug query" in human
+    assert "LOINC" in human
