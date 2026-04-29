@@ -24,10 +24,13 @@ def _evaluator_output(
     return EvaluatorOutput(decision=decision, weak_systems=weak or [], feedback=feedback)
 
 
-def _attempt(iteration: int = 0) -> Attempt:
+def _attempt(iteration: int = 1) -> Attempt:
     return Attempt(
         iteration=iteration,
-        planner_output=_planner_output(),
+        planner_output=_planner_output(
+            systems=[SystemName.ICD10CM, SystemName.LOINC],
+            terms={SystemName.ICD10CM: "hypertension", SystemName.LOINC: "hypertension"},
+        ),
         raw_results={SystemName.ICD10CM: [_make_result(SystemName.ICD10CM, "Essential hypertension")]},
         evaluator_output=_evaluator_output(
             decision="refine",
@@ -61,11 +64,15 @@ def test_build_planner_first_pass() -> None:
 
 
 def test_build_planner_refinement() -> None:
-    from langchain_core.messages import HumanMessage
+    from langchain_core.messages import HumanMessage, SystemMessage
     from clinical_codes.graph.prompts import build_planner_messages
 
     messages = build_planner_messages("hypertension", [_attempt()])
 
+    assert len(messages) == 2
+    assert isinstance(messages[0], SystemMessage)
+    assert isinstance(messages[1], HumanMessage)
+    assert "clinical coding specialist" in messages[0].content
     human = messages[1].content
     assert "Prior attempt" in human
     assert "hypertension" in human
