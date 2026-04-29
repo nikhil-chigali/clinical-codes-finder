@@ -113,3 +113,15 @@ Systems that returned strong results do not need to be re-queried.
 **Tone:** Plain English. Explain medical terms when they appear. No jargon without definition.
 
 **Source:** Per `scope.md` — "plain-English explanation" and "for a potentially non-technical audience."
+
+---
+
+## 8. Scaling beyond 6 systems
+
+The current implementation embeds system descriptions directly in the planner prompt — appropriate for 6 fixed systems. Beyond ~15–20 systems this would become untenable: context cost grows linearly per query, the planner's attention across many options degrades, and onboarding a new system requires editing a central prompt.
+
+The natural evolution is embedding-based pre-routing: each system ships with a self-contained manifest (description, when-to-use, examples), embedded once at startup. The planner LLM sees only the top-k candidates relevant to a given query, with the full catalog available but not always loaded. Adding a system becomes a file drop, not a prompt edit.
+
+Past ~30–50 systems the routing itself is worth replacing with a learned classifier trained on production query-system pairs, which removes the LLM from the routing path entirely and reserves it for query-term generation within already-selected systems. Hierarchical routing (category → system) becomes worth considering at the scale of UMLS-style integration with hundreds of vocabularies.
+
+None of this is built in the prototype because the constraints lock the system count at 6. But the codebase is structured to support the migration: tools already live in per-system modules, and the planner's catalog block is the single place that would be replaced by a registry lookup.
