@@ -19,3 +19,5 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+MAX_ITERATIONS = 2
