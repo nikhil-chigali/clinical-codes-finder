@@ -131,8 +131,20 @@ def test_build_summarizer_messages() -> None:
     assert len(messages) == 2
     assert isinstance(messages[0], SystemMessage)
     assert isinstance(messages[1], HumanMessage)
+    assert "clinical information specialist" in messages[0].content
     human = messages[1].content
     assert "hypertension" in human
     assert "ICD-10-CM covers diagnoses" in human
     assert "Essential (primary) hypertension" in human
     assert "[I10]" in human
+
+
+def test_summarizer_truncates_to_five() -> None:
+    from clinical_codes.graph.prompts import build_summarizer_messages
+
+    results = [
+        _make_result(SystemName.ICD10CM, f"Result {i}", f"X{i:02d}") for i in range(10)
+    ]
+    human = build_summarizer_messages("test", {SystemName.ICD10CM: results}, "rationale")[1].content
+    assert "Result 4" in human      # 5th result shown
+    assert "Result 5" not in human  # 6th result excluded

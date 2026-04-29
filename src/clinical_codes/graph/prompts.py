@@ -113,8 +113,12 @@ def build_summarizer_messages(
     result_lines: list[str] = []
     for system, results in consolidated.items():
         result_lines.append(f"  {system}:")
-        for r in results[:5]:
-            result_lines.append(f"    - {r.display} [{r.code}]")
+        sliced = results[:5]
+        if sliced:
+            for r in sliced:
+                result_lines.append(f"    - {r.display} [{r.code}]")
+        else:
+            result_lines.append("    (no results)")
 
     human = (
         f"Query: {query}\n\n"
