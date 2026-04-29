@@ -32,6 +32,19 @@ On refinement:
 - Systems that returned strong results do not need to be re-queried; omit them from search_terms."""
 
 
+_EVALUATOR_SYSTEM = """You are a clinical code quality evaluator. Given a clinical query and the results returned for each selected coding system, decide whether the results are sufficient or require refinement.
+
+Evaluation criteria:
+- sufficient: every selected system returned at least one result that appears semantically relevant to the query.
+- refine: any selected system returned no results, or its results do not appear relevant to the query (e.g., a drug query against LOINC returns imaging codes).
+
+For each weak system, provide a plain-English diagnosis explaining why the results are weak.
+Do NOT prescribe remediation — do not suggest alternative search terms or systems.
+Describe what went wrong; the planner will decide how to address it.
+
+If decision is "sufficient", weak_systems must be empty and feedback must be an empty string."""
+
+
 def build_planner_messages(query: str, attempt_history: list[Attempt]) -> list[BaseMessage]:
     if not attempt_history:
         human = f"Query: {query}"
@@ -59,7 +72,25 @@ def build_evaluator_messages(
     planner_output: PlannerOutput,
     raw_results: dict[SystemName, list[CodeResult]],
 ) -> list[BaseMessage]:
-    raise NotImplementedError
+    result_lines: list[str] = []
+    for system, term in planner_output.search_terms.items():
+        results = raw_results.get(system, [])[:5]
+        result_lines.append(f"  {system} (searched: \"{term}\"):")
+        if results:
+            for i, r in enumerate(results, 1):
+                result_lines.append(f"    {i}. {r.display}")
+        else:
+            result_lines.append("    (no results)")
+
+    terms_str = ", ".join(
+        f"{system}: \"{term}\"" for system, term in planner_output.search_terms.items()
+    )
+    human = (
+        f"Query: {query}\n"
+        f"Selected systems and search terms: {terms_str}\n\n"
+        f"Results:\n" + "\n".join(result_lines)
+    )
+    return [SystemMessage(content=_EVALUATOR_SYSTEM), HumanMessage(content=human)]
 
 
 def build_summarizer_messages(

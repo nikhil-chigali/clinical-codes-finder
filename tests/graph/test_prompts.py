@@ -78,3 +78,40 @@ def test_build_planner_refinement() -> None:
     assert "hypertension" in human
     assert "LOINC returned no results for this drug query" in human
     assert "LOINC" in human
+
+
+def test_build_evaluator_messages() -> None:
+    from langchain_core.messages import HumanMessage, SystemMessage
+    from clinical_codes.graph.prompts import build_evaluator_messages
+
+    po = _planner_output()
+    raw = {SystemName.ICD10CM: [_make_result(SystemName.ICD10CM, "Essential (primary) hypertension", "I10")]}
+    messages = build_evaluator_messages("hypertension", po, raw)
+
+    assert len(messages) == 2
+    assert isinstance(messages[0], SystemMessage)
+    assert isinstance(messages[1], HumanMessage)
+    human = messages[1].content
+    assert "hypertension" in human
+    assert "Essential (primary) hypertension" in human
+
+
+def test_evaluator_empty_results() -> None:
+    from clinical_codes.graph.prompts import build_evaluator_messages
+
+    messages = build_evaluator_messages("hypertension", _planner_output(), {})
+    assert "(no results)" in messages[1].content
+
+
+def test_evaluator_truncates_to_five() -> None:
+    from clinical_codes.graph.prompts import build_evaluator_messages
+
+    po = _planner_output()
+    raw = {
+        SystemName.ICD10CM: [
+            _make_result(SystemName.ICD10CM, f"Result {i}", f"X{i:02d}") for i in range(10)
+        ]
+    }
+    human = build_evaluator_messages("hypertension", po, raw)[1].content
+    assert "Result 4" in human      # 5th result is shown
+    assert "Result 5" not in human  # 6th result is not shown
