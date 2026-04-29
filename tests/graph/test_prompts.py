@@ -117,3 +117,22 @@ def test_evaluator_truncates_to_five() -> None:
     human = build_evaluator_messages("hypertension", po, raw)[1].content
     assert "Result 4" in human      # 5th result is shown
     assert "Result 5" not in human  # 6th result is not shown
+
+
+def test_build_summarizer_messages() -> None:
+    from langchain_core.messages import HumanMessage, SystemMessage
+    from clinical_codes.graph.prompts import build_summarizer_messages
+
+    consolidated = {
+        SystemName.ICD10CM: [_make_result(SystemName.ICD10CM, "Essential (primary) hypertension", "I10")],
+    }
+    messages = build_summarizer_messages("hypertension", consolidated, "ICD-10-CM covers diagnoses")
+
+    assert len(messages) == 2
+    assert isinstance(messages[0], SystemMessage)
+    assert isinstance(messages[1], HumanMessage)
+    human = messages[1].content
+    assert "hypertension" in human
+    assert "ICD-10-CM covers diagnoses" in human
+    assert "Essential (primary) hypertension" in human
+    assert "[I10]" in human

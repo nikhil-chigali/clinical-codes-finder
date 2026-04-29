@@ -95,9 +95,30 @@ def build_evaluator_messages(
     return [SystemMessage(content=_EVALUATOR_SYSTEM), HumanMessage(content=human)]
 
 
+_SUMMARIZER_SYSTEM = """You are a clinical information specialist. Write a clear, plain-English summary of the medical codes found for the given query. Your audience may be non-technical — a patient, student, or general clinician.
+
+Guidelines:
+- For each system, write one short paragraph: what the system covers, what was found, and why it was included.
+- Refer to results by display name. Include the code in brackets where clinically meaningful (e.g., ICD-10-CM and RxNorm codes are commonly referenced; UCUM units speak for themselves).
+- Define any medical term you use.
+- Do not mention systems that were not selected.
+- If no results were found across any system, return a polite refusal and suggest the user rephrase using a recognized clinical term."""
+
+
 def build_summarizer_messages(
     query: str,
     consolidated: dict[SystemName, list[CodeResult]],
     rationale: str,
 ) -> list[BaseMessage]:
-    raise NotImplementedError
+    result_lines: list[str] = []
+    for system, results in consolidated.items():
+        result_lines.append(f"  {system}:")
+        for r in results[:5]:
+            result_lines.append(f"    - {r.display} [{r.code}]")
+
+    human = (
+        f"Query: {query}\n\n"
+        f"Why these systems were selected: {rationale}\n\n"
+        f"Results:\n" + "\n".join(result_lines)
+    )
+    return [SystemMessage(content=_SUMMARIZER_SYSTEM), HumanMessage(content=human)]
