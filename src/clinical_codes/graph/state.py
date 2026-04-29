@@ -21,6 +21,7 @@ from clinical_codes.schemas import CodeResult, SystemName
 
 
 class PlannerOutput(BaseModel):
+    # per-iteration selection — may change on refinement (planner can add or drop systems)
     selected_systems: list[SystemName]
     search_terms: dict[SystemName, str]
     rationale: str
