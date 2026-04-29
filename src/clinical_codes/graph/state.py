@@ -24,3 +24,14 @@ class Attempt(BaseModel):
     planner_output: PlannerOutput
     raw_results: dict[SystemName, list[CodeResult]]
     evaluator_output: EvaluatorOutput
+
+
+class GraphState(TypedDict):
+    query: str
+    iteration: int
+    planner_output: PlannerOutput | None
+    raw_results: dict[SystemName, list[CodeResult]]
+    evaluator_output: EvaluatorOutput | None
+    attempt_history: Annotated[list[Attempt], operator.add]
+    consolidated: dict[SystemName, list[CodeResult]]
+    summary: str
