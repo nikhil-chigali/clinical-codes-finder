@@ -17,3 +17,10 @@ class EvaluatorOutput(BaseModel):
     decision: Literal["sufficient", "refine"]
     weak_systems: list[SystemName]
     feedback: str
+
+
+class Attempt(BaseModel):
+    iteration: int
+    planner_output: PlannerOutput
+    raw_results: dict[SystemName, list[CodeResult]]
+    evaluator_output: EvaluatorOutput
