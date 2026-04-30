@@ -129,3 +129,18 @@ def test_overall_table_values() -> None:
     md = format_markdown(summary)
     assert "## Overall" in md
     assert str(summary.n_total) in md
+
+
+# ── format_markdown — by-type + None rendering ───────────────────────────────
+
+def test_by_type_miss_shows_n_a_for_recall() -> None:
+    md = format_markdown(make_summary())
+    # The miss row has top3_recall=None → must render as n/a
+    assert "n/a" in md
+
+
+def test_all_miss_type_overall_recall_shows_n_a() -> None:
+    md = format_markdown(make_all_miss_summary())
+    # Every QueryTypeMetrics has top3_recall=None → overall row must also show n/a
+    lines = [line for line in md.splitlines() if "Top-3 recall" in line]
+    assert any("n/a" in line for line in lines)
