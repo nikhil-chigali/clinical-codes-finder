@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from clinical_codes.evaluation.metrics import MetricsSummary
 
 
@@ -54,3 +56,23 @@ def format_markdown(summary: MetricsSummary) -> str:
             )
 
     return "\n".join(lines)
+
+
+def write_report(
+    summary: MetricsSummary,
+    run_id: str,
+    output_dir: Path = Path("results"),
+) -> tuple[Path, Path]:
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    json_path = output_dir / f"eval_{run_id}.json"
+    md_path = output_dir / f"eval_{run_id}.md"
+
+    json_path.write_text(summary.model_dump_json(indent=2), encoding="utf-8")
+    md_path.write_text(
+        f"# Eval results — {run_id}\n\n" + format_markdown(summary),
+        encoding="utf-8",
+    )
+
+    return json_path, md_path

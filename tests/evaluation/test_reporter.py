@@ -3,7 +3,7 @@ from clinical_codes.evaluation.metrics import (
     QueryMetrics,
     QueryTypeMetrics,
 )
-from clinical_codes.evaluation.reporter import format_markdown
+from clinical_codes.evaluation.reporter import format_markdown, write_report
 
 
 def _make_qm(
@@ -165,3 +165,25 @@ def test_no_failures_shows_none() -> None:
     md = format_markdown(make_perfect_summary())
     # All queries have system_f1=1.0 and no errors — section body is *(none)*
     assert "*(none)*" in md
+
+
+# ── write_report ──────────────────────────────────────────────────────────────
+
+
+def test_write_report_creates_both_files(tmp_path) -> None:
+    json_path, md_path = write_report(make_summary(), run_id="v0.1.1", output_dir=tmp_path)
+    assert json_path.exists()
+    assert md_path.exists()
+
+
+def test_write_report_json_roundtrips(tmp_path) -> None:
+    from clinical_codes.evaluation.metrics import MetricsSummary
+    json_path, _ = write_report(make_summary(), run_id="v0.1.1", output_dir=tmp_path)
+    loaded = MetricsSummary.model_validate_json(json_path.read_text(encoding="utf-8"))
+    assert loaded.n_total == make_summary().n_total
+
+
+def test_write_report_filenames_contain_version(tmp_path) -> None:
+    json_path, md_path = write_report(make_summary(), run_id="v0.1.1", output_dir=tmp_path)
+    assert "v0.1.1" in json_path.name
+    assert "v0.1.1" in md_path.name
