@@ -7,7 +7,7 @@ from clinical_codes.schemas import CodeResult, SystemName
 
 def _make_console() -> tuple[Console, io.StringIO]:
     buf = io.StringIO()
-    return Console(file=buf, highlight=False), buf
+    return Console(file=buf, highlight=False, width=120), buf
 
 
 def _make_result(
