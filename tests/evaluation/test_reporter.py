@@ -144,3 +144,24 @@ def test_all_miss_type_overall_recall_shows_n_a() -> None:
     # Every QueryTypeMetrics has top3_recall=None → overall row must also show n/a
     lines = [line for line in md.splitlines() if "Top-3 recall" in line]
     assert any("n/a" in line for line in lines)
+
+
+# ── format_markdown — failures ────────────────────────────────────────────────
+
+
+def test_failures_includes_error_query() -> None:
+    md = format_markdown(make_summary())
+    # q003 has error="timeout" — must appear in the failures section
+    assert "timeout" in md
+
+
+def test_failures_includes_low_f1_query() -> None:
+    md = format_markdown(make_summary())
+    # q001 has system_f1=0.5 < 1.0 — its query_id must appear in the failures table
+    assert "q001" in md
+
+
+def test_no_failures_shows_none() -> None:
+    md = format_markdown(make_perfect_summary())
+    # All queries have system_f1=1.0 and no errors — section body is *(none)*
+    assert "*(none)*" in md

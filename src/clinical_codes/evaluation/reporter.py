@@ -36,5 +36,21 @@ def format_markdown(summary: MetricsSummary) -> str:
             f"{_fmt(qt.top3_recall)} | {_fmt(qt.must_include_hit_rate)} | "
             f"{qt.mean_iterations:.2f} | {qt.mean_api_calls:.2f} |"
         )
+    lines.append("")
+
+    # Failures
+    failures = [qm for qm in summary.per_query if qm.system_f1 < 1.0 or qm.error is not None]
+    lines.append("## Failures (system_f1 < 1.0 or error)\n")
+    if not failures:
+        lines.append("*(none)*")
+    else:
+        lines.append("| Query ID | Query | Type | System F1 | Error |")
+        lines.append("|---|---|---|---|---|")
+        for qm in failures:
+            error_str = qm.error if qm.error is not None else "—"
+            lines.append(
+                f"| {qm.query_id} | {qm.query} | {qm.query_type} | "
+                f"{qm.system_f1:.2f} | {error_str} |"
+            )
 
     return "\n".join(lines)
