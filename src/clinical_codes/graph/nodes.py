@@ -6,7 +6,7 @@ from clinical_codes.config import settings
 from clinical_codes.graph.prompts import (
     build_evaluator_messages,
     build_planner_messages,
-    build_summarizer_messages,  # noqa: F401 — used by summarizer (Task 5)
+    build_summarizer_messages,
 )
 from clinical_codes.graph.state import Attempt, EvaluatorOutput, GraphState, PlannerOutput
 from clinical_codes.schemas import CodeResult, SystemName
@@ -97,3 +97,13 @@ def consolidator(state: GraphState) -> dict:
         consolidated[system] = deduped[:settings.display_results]
 
     return {"consolidated": consolidated}
+
+
+async def summarizer(state: GraphState) -> dict:
+    messages = build_summarizer_messages(
+        state["query"],
+        state["consolidated"],
+        state["planner_output"].rationale,
+    )
+    response = await _summarizer_llm.ainvoke(messages)
+    return {"summary": response.content}
