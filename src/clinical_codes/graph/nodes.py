@@ -1,7 +1,7 @@
-# Imports marked `noqa: F401` are forward-use scaffolding for Tasks 3–5.
-# They are not referenced by the currently implemented nodes (planner, consolidator)
-# but will be used by executor (Task 3), evaluator (Task 4), and summarizer (Task 5).
-import asyncio  # noqa: F401 — used by executor (Task 3)
+# `asyncio` and `CLIENTS` are actively used by the executor node.
+# `build_evaluator_messages`, `build_summarizer_messages`, and `Attempt` are
+# forward-use scaffolding (noqa: F401) for evaluator (Task 4) and summarizer (Task 5).
+import asyncio
 
 from langchain_anthropic import ChatAnthropic
 
@@ -14,7 +14,7 @@ from clinical_codes.graph.prompts import (
 from clinical_codes.graph.state import Attempt  # noqa: F401 — used by evaluator (Task 4)
 from clinical_codes.graph.state import EvaluatorOutput, GraphState, PlannerOutput
 from clinical_codes.schemas import CodeResult, SystemName
-from clinical_codes.tools import CLIENTS  # noqa: F401 — used by executor (Task 3)
+from clinical_codes.tools import CLIENTS
 
 # api_key passed explicitly so construction succeeds when ANTHROPIC_API_KEY is
 # absent at test time — all LLM calls are monkeypatched in tests.
