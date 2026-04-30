@@ -18,8 +18,7 @@ def run_query(gold_query: GoldQuery) -> RunResult:
     try:
         state = _get_graph().invoke(make_initial_state(gold_query.query))
         latency_s = time.monotonic() - start
-        planner_out = state["planner_output"]
-        predicted_systems = planner_out.selected_systems if planner_out else []
+        predicted_systems = list(state["consolidated"].keys())
         predicted_codes = {
             sys: [r.code for r in results]
             for sys, results in state["consolidated"].items()
