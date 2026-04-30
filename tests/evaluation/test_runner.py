@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -115,7 +115,7 @@ def test_run_query_happy_path() -> None:
     )
 
     with patch("clinical_codes.evaluation.runner._get_graph") as mock_get_graph:
-        mock_get_graph.return_value.invoke.return_value = _fake_final_state()
+        mock_get_graph.return_value.ainvoke = AsyncMock(return_value=_fake_final_state())
         result = run_query(gold_query)
 
     assert result.query_id == "q001"
@@ -143,7 +143,7 @@ def test_run_query_graph_error() -> None:
     )
 
     with patch("clinical_codes.evaluation.runner._get_graph") as mock_get_graph:
-        mock_get_graph.return_value.invoke.side_effect = RuntimeError("api error")
+        mock_get_graph.return_value.ainvoke = AsyncMock(side_effect=RuntimeError("api error"))
         result = run_query(gold_query)
 
     assert result.error == "api error"
@@ -210,3 +210,28 @@ def test_run_gold_set_loads_and_loops(tmp_path: Path, capsys: pytest.CaptureFixt
     captured = capsys.readouterr()
     assert "q001" in captured.out
     assert "q002" in captured.out
+
+
+# ── integration ───────────────────────────────────────────────────────────────
+
+@pytest.mark.integration
+def test_run_query_real_graph_hypertension() -> None:
+    from clinical_codes.evaluation.runner import run_query
+    from clinical_codes.evaluation.schema import GoldQuery
+
+    gold_query = GoldQuery(
+        id="q002",
+        query="hypertension",
+        query_type="simple",
+        expected_systems=[SystemName.ICD10CM],
+        expected_codes={SystemName.ICD10CM: ["I10"]},
+        must_include=["I10"],
+        must_not_include=[],
+    )
+
+    result = run_query(gold_query)
+
+    assert result.error is None
+    assert SystemName.ICD10CM in result.predicted_systems
+    assert len(result.predicted_codes.get(SystemName.ICD10CM, [])) > 0
+    assert result.summary != ""

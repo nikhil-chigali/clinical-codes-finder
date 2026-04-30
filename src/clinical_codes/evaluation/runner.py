@@ -1,3 +1,4 @@
+import asyncio
 import json
 import time
 from pathlib import Path
@@ -15,10 +16,10 @@ def _get_graph():
     return _graph
 
 
-def run_query(gold_query: GoldQuery) -> RunResult:
+async def run_query_async(gold_query: GoldQuery) -> RunResult:
     start = time.monotonic()
     try:
-        state = _get_graph().invoke(make_initial_state(gold_query.query))
+        state = await _get_graph().ainvoke(make_initial_state(gold_query.query))
         latency_s = time.monotonic() - start
         predicted_systems = list(state["consolidated"].keys())
         predicted_codes = {
@@ -54,6 +55,11 @@ def run_query(gold_query: GoldQuery) -> RunResult:
             error=str(exc),
             summary="",
         )
+
+
+def run_query(gold_query: GoldQuery) -> RunResult:
+    """Synchronous wrapper around run_query_async for backwards compatibility."""
+    return asyncio.run(run_query_async(gold_query))
 
 
 def run_gold_set(path: Path | str) -> list[RunResult]:
