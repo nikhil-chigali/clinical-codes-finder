@@ -22,6 +22,8 @@ dev = [
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+addopts = ["-m", "not integration"]
+markers = ["integration: marks tests that require a real ANTHROPIC_API_KEY"]
 
 [build-system]
 requires = ["setuptools>=67", "wheel"]
