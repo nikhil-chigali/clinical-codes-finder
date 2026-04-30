@@ -57,7 +57,7 @@ def run_query(gold_query: GoldQuery) -> RunResult:
 
 
 def run_gold_set(path: Path | str) -> list[RunResult]:
-    data = json.loads(Path(path).read_text())
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
     gold_set = GoldSet.model_validate(data)
     results = []
     for gq in gold_set.queries:

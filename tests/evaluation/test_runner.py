@@ -156,7 +156,7 @@ def test_run_query_graph_error() -> None:
 
 # ── run_gold_set ──────────────────────────────────────────────────────────────
 
-def test_run_gold_set_loads_and_loops(tmp_path: Path) -> None:
+def test_run_gold_set_loads_and_loops(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
     from clinical_codes.evaluation.runner import run_gold_set
     from clinical_codes.evaluation.schema import RunResult
 
@@ -206,3 +206,7 @@ def test_run_gold_set_loads_and_loops(tmp_path: Path) -> None:
     assert mock_rq.call_count == 2
     assert mock_rq.call_args_list[0].args[0].id == "q001"
     assert mock_rq.call_args_list[1].args[0].id == "q002"
+
+    captured = capsys.readouterr()
+    assert "q001" in captured.out
+    assert "q002" in captured.out
