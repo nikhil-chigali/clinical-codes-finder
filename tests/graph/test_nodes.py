@@ -165,7 +165,7 @@ async def test_planner_first_pass_passes_empty_history() -> None:
         with patch("clinical_codes.graph.nodes.build_planner_messages") as mock_build:
             mock_build.return_value = []
             await planner(_make_state(attempt_history=[]))
-    mock_build.assert_called_once_with("hypertension", [])
+            mock_build.assert_called_once_with("hypertension", [])
 
 
 async def test_planner_refinement_passes_attempt_history() -> None:
@@ -186,4 +186,4 @@ async def test_planner_refinement_passes_attempt_history() -> None:
         with patch("clinical_codes.graph.nodes.build_planner_messages") as mock_build:
             mock_build.return_value = []
             await planner(_make_state(attempt_history=[attempt]))
-    mock_build.assert_called_once_with("hypertension", [attempt])
+            mock_build.assert_called_once_with("hypertension", [attempt])
