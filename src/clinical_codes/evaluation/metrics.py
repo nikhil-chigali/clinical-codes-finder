@@ -1,5 +1,7 @@
 from pydantic import BaseModel
 
+from clinical_codes.schemas import SystemName
+
 
 class QueryMetrics(BaseModel):
     query_id: str
@@ -36,3 +38,14 @@ class MetricsSummary(BaseModel):
     mean_api_calls: float
     by_type: dict[str, QueryTypeMetrics]
     per_query: list[QueryMetrics]
+
+
+def _system_f1(
+    predicted: list[SystemName],
+    expected: list[SystemName],
+) -> tuple[float, float, float]:
+    tp = len(set(predicted) & set(expected))
+    precision = tp / len(predicted) if predicted else 1.0
+    recall = tp / len(expected) if expected else 1.0
+    f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
+    return precision, recall, f1

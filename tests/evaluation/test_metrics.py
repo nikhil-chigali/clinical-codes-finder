@@ -34,3 +34,36 @@ def test_metrics_summary_instantiates() -> None:
         per_query=[],
     )
     assert summary.n_total == 1
+
+
+# ── _system_f1 ────────────────────────────────────────────────────────────────
+
+from clinical_codes.evaluation.metrics import _system_f1
+
+
+def test_system_f1_perfect_match() -> None:
+    p, r, f1 = _system_f1([SystemName.ICD10CM], [SystemName.ICD10CM])
+    assert p == 1.0
+    assert r == 1.0
+    assert f1 == 1.0
+
+
+def test_system_f1_miss_query_both_empty() -> None:
+    p, r, f1 = _system_f1([], [])
+    assert f1 == 1.0
+
+
+def test_system_f1_hallucinated_systems() -> None:
+    # predicted non-empty, expected empty → F1 = 0
+    p, r, f1 = _system_f1([SystemName.ICD10CM], [])
+    assert f1 == 0.0
+
+
+def test_system_f1_partial_overlap() -> None:
+    p, r, f1 = _system_f1(
+        [SystemName.ICD10CM, SystemName.LOINC],
+        [SystemName.ICD10CM, SystemName.RXNORM],
+    )
+    assert p == 0.5
+    assert r == 0.5
+    assert abs(f1 - 0.5) < 1e-9
