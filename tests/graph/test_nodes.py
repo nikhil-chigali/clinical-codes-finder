@@ -187,3 +187,71 @@ async def test_planner_refinement_passes_attempt_history() -> None:
             mock_build.return_value = []
             await planner(_make_state(attempt_history=[attempt]))
             mock_build.assert_called_once_with("hypertension", [attempt])
+
+
+# ── Executor ──────────────────────────────────────────────────────────────────
+
+async def test_executor_queries_search_terms() -> None:
+    from clinical_codes.graph.nodes import executor
+
+    results = [_make_result(SystemName.ICD10CM, "I10", "Essential hypertension")]
+    mock_client = _make_mock_client(results)
+    mock_clients = {SystemName.ICD10CM: MagicMock(return_value=mock_client)}
+
+    with patch("clinical_codes.graph.nodes.CLIENTS", mock_clients):
+        state = _make_state(
+            planner_output=_make_planner_output(
+                systems=[SystemName.ICD10CM],
+                terms={SystemName.ICD10CM: "hypertension"},
+            ),
+        )
+        result = await executor(state)
+
+    assert SystemName.ICD10CM in result["raw_results"]
+    assert result["raw_results"][SystemName.ICD10CM] == results
+
+
+async def test_executor_merges_existing_raw_results() -> None:
+    from clinical_codes.graph.nodes import executor
+
+    existing_loinc = [_make_result(SystemName.LOINC, "L001", "Glucose panel")]
+    new_icd10 = [_make_result(SystemName.ICD10CM, "I10", "Essential hypertension")]
+    mock_client = _make_mock_client(new_icd10)
+    mock_clients = {SystemName.ICD10CM: MagicMock(return_value=mock_client)}
+
+    with patch("clinical_codes.graph.nodes.CLIENTS", mock_clients):
+        # LOINC was already queried in a previous iteration and had good results;
+        # only ICD10CM is in search_terms this pass (LOINC not re-queried)
+        state = _make_state(
+            raw_results={SystemName.LOINC: existing_loinc},
+            planner_output=_make_planner_output(
+                systems=[SystemName.ICD10CM, SystemName.LOINC],
+                terms={SystemName.ICD10CM: "hypertension"},
+            ),
+        )
+        result = await executor(state)
+
+    assert result["raw_results"][SystemName.LOINC] == existing_loinc  # preserved
+    assert result["raw_results"][SystemName.ICD10CM] == new_icd10      # added
+
+
+async def test_executor_overwrites_previous_results() -> None:
+    from clinical_codes.graph.nodes import executor
+
+    old = [_make_result(SystemName.ICD10CM, "I10", "Old result")]
+    new = [_make_result(SystemName.ICD10CM, "I11", "Better result")]
+    mock_client = _make_mock_client(new)
+    mock_clients = {SystemName.ICD10CM: MagicMock(return_value=mock_client)}
+
+    with patch("clinical_codes.graph.nodes.CLIENTS", mock_clients):
+        # ICD10CM was weak in iteration 1 and is re-queried with a better term
+        state = _make_state(
+            raw_results={SystemName.ICD10CM: old},
+            planner_output=_make_planner_output(
+                systems=[SystemName.ICD10CM],
+                terms={SystemName.ICD10CM: "essential hypertension"},
+            ),
+        )
+        result = await executor(state)
+
+    assert result["raw_results"][SystemName.ICD10CM] == new  # replaced, not appended

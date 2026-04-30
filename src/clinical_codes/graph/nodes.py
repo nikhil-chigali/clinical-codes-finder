@@ -49,6 +49,25 @@ async def planner(state: GraphState) -> dict:
     return {"planner_output": output, "iteration": state["iteration"] + 1}
 
 
+async def executor(state: GraphState) -> dict:
+    search_terms = state["planner_output"].search_terms
+
+    async def _search_one(
+        system: SystemName, term: str
+    ) -> tuple[SystemName, list[CodeResult]]:
+        async with CLIENTS[system]() as client:
+            results = await client.search(term)
+        return system, results
+
+    pairs: list[tuple[SystemName, list[CodeResult]]] = await asyncio.gather(
+        *[_search_one(system, term) for system, term in search_terms.items()]
+    )
+    merged = dict(state["raw_results"])
+    for system, results in pairs:
+        merged[system] = results
+    return {"raw_results": merged}
+
+
 def consolidator(state: GraphState) -> dict:
     selected = state["planner_output"].selected_systems
     raw = state["raw_results"]
