@@ -100,6 +100,9 @@ def compute_metrics(
     gold: list[GoldQuery],
 ) -> MetricsSummary:
     gold_by_id = {gq.id: gq for gq in gold}
+    missing = [r.query_id for r in results if r.query_id not in gold_by_id]
+    if missing:
+        raise ValueError(f"RunResult query_ids not present in gold set: {missing}")
     per_query: list[QueryMetrics] = []
     for result in results:
         gq = gold_by_id[result.query_id]
