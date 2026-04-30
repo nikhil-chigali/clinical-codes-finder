@@ -65,7 +65,8 @@ Full trade-off analysis in [`docs/design-decisions.md`](docs/design-decisions.md
 | `tools/` — 6 Clinical Tables API wrappers | ✅ Done |
 | `graph/state.py`, `graph/prompts.py`, `graph/nodes.py` | ✅ Done |
 | `graph/builder.py` — graph assembly | ✅ Done |
-| `evaluation/` — runner, metrics, reporter | 🔲 Pending |
+| `evaluation/schema.py`, `runner.py` — gold set schema + runner | ✅ Done |
+| `evaluation/metrics.py`, `reporter.py` — metrics + reporting | 🔲 Pending |
 | `app/streamlit_app.py` — Streamlit UI | 🔲 Pending |
 | `scripts/run_query.py`, `scripts/run_eval.py` | 🔲 Pending |
 

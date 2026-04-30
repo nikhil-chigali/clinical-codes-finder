@@ -50,7 +50,9 @@ Graph is assembled in `graph/builder.py`. State shape lives in `graph/state.py`.
 | `graph/prompts.py` — all prompt templates | ✅ Done |
 | `graph/nodes.py` — all 5 nodes | ✅ Done |
 | `graph/builder.py` — graph assembly | ✅ Done |
-| `evaluation/` — gold set runner, metrics, reporter | 🔲 Pending |
+| `evaluation/schema.py` — GoldQuery, GoldSet, RunResult | ✅ Done |
+| `evaluation/runner.py` — run_query, run_gold_set, lazy graph singleton | ✅ Done |
+| `evaluation/metrics.py`, `evaluation/reporter.py` | 🔲 Pending |
 | `app/streamlit_app.py` — Streamlit UI | 🔲 Pending |
 | `scripts/run_query.py`, `scripts/run_eval.py` | 🔲 Pending |
 
@@ -82,3 +84,5 @@ Sliced by query type: `simple`, `multi_system`, `ambiguous`, `miss`.
 ## Notes
 
 - `langsmith` appears in pytest plugin output — it's a transitive dep of `langchain-anthropic`, not explicitly installed
+- Graph nodes (`planner`, `executor`, `evaluator`, `summarizer`) are `async def`. Calling the compiled graph from synchronous code requires `asyncio.run(graph.ainvoke(...))` — `.invoke()` raises `TypeError: No synchronous function provided` in LangGraph 1.1.10
+- Integration tests (`@pytest.mark.integration`) are excluded from `uv run pytest` by default. Run them explicitly: `uv run pytest -m integration -v`
