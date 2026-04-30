@@ -12,13 +12,13 @@ An agentic system that takes a natural-language clinical term and returns releva
 uv sync                    # install deps (use uv, not pip)
 cp .env.example .env       # add ANTHROPIC_API_KEY
 
-uv run python -m scripts.run_query "metformin 500 mg"   # CLI query
-uv run streamlit run src/clinical_codes/app/streamlit_app.py  # UI
+uv run pytest              # all tests
+uv run pytest tests/graph/test_nodes.py  # single test file
 
-uv run pytest                                 # all tests
-uv run pytest tests/graph/test_consolidator.py  # single test file
-
-uv run python -m scripts.run_eval --gold data/gold/gold_v0.1.1.json  # evaluation
+# Not yet implemented (pending builder, evaluation, app, scripts phases):
+# uv run python -m scripts.run_query "metformin 500 mg"
+# uv run streamlit run src/clinical_codes/app/streamlit_app.py
+# uv run python -m scripts.run_eval --gold data/gold/gold_v0.1.1.json
 ```
 
 ## Architecture
@@ -41,13 +41,26 @@ Graph is assembled in `graph/builder.py`. State shape lives in `graph/state.py`.
 - **Gold set is versioned** (`data/gold/gold_v0.1.1.json`). Never overwrite — bump the version when adding queries.
 - Tools in `src/clinical_codes/tools/` wrap the Clinical Tables API and normalize to a common shape `{code, display, score, raw}`. Base client with retry/timeout lives in `tools/base.py`.
 
+## Implementation status
+
+| Component | Status |
+|---|---|
+| `tools/` — 6 Clinical Tables API wrappers + base client | ✅ Done |
+| `graph/state.py` — TypedDict, Pydantic models, `operator.add` reducer | ✅ Done |
+| `graph/prompts.py` — all prompt templates | ✅ Done |
+| `graph/nodes.py` — all 5 nodes | ✅ Done |
+| `graph/builder.py` — graph assembly | 🔲 Pending |
+| `evaluation/` — gold set runner, metrics, reporter | 🔲 Pending |
+| `app/streamlit_app.py` — Streamlit UI | 🔲 Pending |
+| `scripts/run_query.py`, `scripts/run_eval.py` | 🔲 Pending |
+
 ## Open obligations for `graph/builder.py`
 
 These constraints are enforced by convention, not the type system — the builder author must honour them:
 
 1. **Iteration contract.** The `planner` node must write `{"iteration": state["iteration"] + 1}` as part of its return value at the start of each pass. `route_after_evaluator` reads `iteration` post-increment; with `MAX_ITERATIONS=2`, the second evaluator call sees `iteration=2`, which triggers the cap. If the planner does not increment, the cap never fires.
 
-2. **Node-name constants.** `route_after_evaluator` in `graph/state.py` returns the hardcoded strings `"consolidator"` and `"planner"`. When registering nodes in `builder.py`, use the same string literals (or extract shared constants that both files import) — a mismatch silently routes to a nonexistent node and surfaces only at runtime.
+2. **Node-name constants.** `NODE_PLANNER = "planner"` and `NODE_CONSOLIDATOR = "consolidator"` are defined as module-level constants in `config.py` (alongside `MAX_ITERATIONS`). `route_after_evaluator` lives in `builder.py` — not `state.py` — and returns these constants. Register nodes with `add_node(NODE_PLANNER, planner)` etc. A name mismatch silently routes to a nonexistent node and surfaces only at runtime.
 
 ## Project layout
 

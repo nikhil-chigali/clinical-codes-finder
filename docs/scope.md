@@ -115,7 +115,7 @@ LangSmith tracing enabled. Every graph run produces a traceable execution with n
 | Parameter | Value |
 |---|---|
 | Gold set size | 30 queries |
-| Version | `gold_v0.1.0.json` — never overwritten, version bumped on additions |
+| Version | `gold_v0.1.1.json` — never overwritten, version bumped on additions |
 | Curation | Done by Nikhil (next step, after Phase 0 implementation) |
 | Query type distribution | `simple`, `multi_system`, `ambiguous`, `miss` |
 

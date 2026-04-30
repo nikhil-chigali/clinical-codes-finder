@@ -58,27 +58,41 @@ Full trade-off analysis in [`docs/design-decisions.md`](docs/design-decisions.md
 
 ---
 
+## Implementation status
+
+| Component | Status |
+|---|---|
+| `tools/` — 6 Clinical Tables API wrappers | ✅ Done |
+| `graph/state.py`, `graph/prompts.py`, `graph/nodes.py` | ✅ Done |
+| `graph/builder.py` — graph assembly | 🔲 Pending |
+| `evaluation/` — runner, metrics, reporter | 🔲 Pending |
+| `app/streamlit_app.py` — Streamlit UI | 🔲 Pending |
+| `scripts/run_query.py`, `scripts/run_eval.py` | 🔲 Pending |
+
 ## Setup
 
 ```bash
 git clone <repo-url> && cd clinical-codes-finder
 uv sync                    # or: pip install -e .
 cp .env.example .env       # add ANTHROPIC_API_KEY
+uv run pytest              # confirm 63 tests pass
 ```
 
 ## Usage
 
-**CLI:**
+> **Note:** CLI, UI, and eval commands require pending phases to be implemented first.
+
+**CLI** *(pending `scripts/run_query.py`)*:
 ```bash
 uv run python -m scripts.run_query "metformin 500 mg"
 ```
 
-**Streamlit UI** (with reasoning trace visible):
+**Streamlit UI** *(pending `app/streamlit_app.py`)*:
 ```bash
 uv run streamlit run src/clinical_codes/app/streamlit_app.py
 ```
 
-**Run the eval:**
+**Run the eval** *(pending `evaluation/` and `scripts/run_eval.py`)*:
 ```bash
 uv run python -m scripts.run_eval --gold data/gold/gold_v0.1.1.json
 ```
@@ -105,7 +119,7 @@ Sliced by query type:
 | ambiguous | TBD | TBD | TBD |
 | miss | TBD | TBD | n/a |
 
-Failure analysis in [`docs/eval-results.md`](docs/eval-results.md).
+Failure analysis in `docs/eval-results.md` *(populated after evaluation runs)*.
 
 ---
 
@@ -127,18 +141,17 @@ tests/                # Mirrors src/ layout
 ```DETAILED STRUCTURE
 clinical-codes-finder/
 ├── README.md                          # problem, architecture, decisions, eval results
-├── pyproject.toml                     # deps + project metadata (use uv or poetry)
-├── Makefile                           # install / test / eval / run / app
-├── .env.example                       # OPENAI_API_KEY, etc.
+├── pyproject.toml                     # deps + project metadata (uv)
+├── .env.example                       # ANTHROPIC_API_KEY
 ├── .gitignore
 │
 ├── docs/
-│   ├── architecture.md                # diagram + node-by-node flow
 │   ├── design-decisions.md            # Plan-and-Execute vs ReAct, refinement triggers, etc.
-│   ├── eval-methodology.md            # how the gold set was curated, what metrics mean
 │   ├── scope.md                       # Phase 0 deliverable: what's in/out of scope
+│   ├── architecture.md                # diagram + node-by-node flow (pending)
+│   ├── eval-methodology.md            # how the gold set was curated, what metrics mean (pending)
 │   └── images/
-│       └── architecture.png
+│       └── architecture.svg
 │
 ├── src/
 │   └── clinical_codes/
