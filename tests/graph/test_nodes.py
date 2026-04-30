@@ -255,3 +255,39 @@ async def test_executor_overwrites_previous_results() -> None:
         result = await executor(state)
 
     assert result["raw_results"][SystemName.ICD10CM] == new  # replaced, not appended
+
+
+# ── Evaluator ─────────────────────────────────────────────────────────────────
+
+async def test_evaluator_writes_evaluator_output() -> None:
+    from clinical_codes.graph.nodes import evaluator
+
+    expected = _make_evaluator_output()
+    with patch("clinical_codes.graph.nodes._evaluator_chain") as mock_chain:
+        mock_chain.ainvoke = AsyncMock(return_value=expected)
+        state = _make_state(
+            iteration=1,
+            raw_results={SystemName.ICD10CM: [_make_result(SystemName.ICD10CM, "I10", "Hypertension")]},
+        )
+        result = await evaluator(state)
+    assert result["evaluator_output"] == expected
+
+
+async def test_evaluator_appends_attempt() -> None:
+    from clinical_codes.graph.nodes import evaluator
+
+    eo = _make_evaluator_output()
+    po = _make_planner_output()
+    raw = {SystemName.ICD10CM: [_make_result(SystemName.ICD10CM, "I10", "Hypertension")]}
+
+    with patch("clinical_codes.graph.nodes._evaluator_chain") as mock_chain:
+        mock_chain.ainvoke = AsyncMock(return_value=eo)
+        state = _make_state(iteration=1, planner_output=po, raw_results=raw)
+        result = await evaluator(state)
+
+    assert len(result["attempt_history"]) == 1
+    attempt = result["attempt_history"][0]
+    assert attempt.iteration == 1
+    assert attempt.planner_output == po
+    assert attempt.raw_results == raw
+    assert attempt.evaluator_output == eo

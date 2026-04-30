@@ -68,6 +68,22 @@ async def executor(state: GraphState) -> dict:
     return {"raw_results": merged}
 
 
+async def evaluator(state: GraphState) -> dict:
+    messages = build_evaluator_messages(
+        state["query"],
+        state["planner_output"],
+        state["raw_results"],
+    )
+    output: EvaluatorOutput = await _evaluator_chain.ainvoke(messages)
+    attempt = Attempt(
+        iteration=state["iteration"],
+        planner_output=state["planner_output"],
+        raw_results=state["raw_results"],
+        evaluator_output=output,
+    )
+    return {"evaluator_output": output, "attempt_history": [attempt]}
+
+
 def consolidator(state: GraphState) -> dict:
     selected = state["planner_output"].selected_systems
     raw = state["raw_results"]
