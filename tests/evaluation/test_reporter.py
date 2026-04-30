@@ -123,7 +123,9 @@ def make_all_miss_summary() -> MetricsSummary:
 
 # ── format_markdown — overall ────────────────────────────────────────────────
 
+
 def test_overall_table_values() -> None:
-    md = format_markdown(make_summary())
+    summary = make_summary()
+    md = format_markdown(summary)
     assert "## Overall" in md
-    assert str(make_summary().n_total) in md   # "3" appears in the Total queries row
+    assert str(summary.n_total) in md
