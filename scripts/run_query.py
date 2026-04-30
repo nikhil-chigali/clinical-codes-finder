@@ -12,7 +12,6 @@ from rich.rule import Rule
 from clinical_codes.cli.display import render_error, render_results, update_status
 from clinical_codes.config import settings
 from clinical_codes.graph.builder import build_graph, make_initial_state
-from clinical_codes.schemas import CodeResult, SystemName
 
 app = typer.Typer(add_completion=False)
 
