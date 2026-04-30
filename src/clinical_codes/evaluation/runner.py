@@ -1,6 +1,8 @@
+import json
 import time
+from pathlib import Path
 
-from clinical_codes.evaluation.schema import GoldQuery, RunResult
+from clinical_codes.evaluation.schema import GoldQuery, GoldSet, RunResult
 from clinical_codes.graph.builder import build_graph, make_initial_state
 
 _graph = None
@@ -52,3 +54,15 @@ def run_query(gold_query: GoldQuery) -> RunResult:
             error=str(exc),
             summary="",
         )
+
+
+def run_gold_set(path: Path | str) -> list[RunResult]:
+    data = json.loads(Path(path).read_text())
+    gold_set = GoldSet.model_validate(data)
+    results = []
+    for gq in gold_set.queries:
+        result = run_query(gq)
+        status = f"ERROR: {result.error}" if result.error else f"{result.latency_s:.1f}s"
+        print(f"  {gq.id} ({gq.query_type}): {status}")
+        results.append(result)
+    return results

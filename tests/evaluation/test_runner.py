@@ -152,3 +152,57 @@ def test_run_query_graph_error() -> None:
     assert result.iterations == 0
     assert result.summary == ""
     assert result.latency_s >= 0
+
+
+# ── run_gold_set ──────────────────────────────────────────────────────────────
+
+def test_run_gold_set_loads_and_loops(tmp_path: Path) -> None:
+    from clinical_codes.evaluation.runner import run_gold_set
+    from clinical_codes.evaluation.schema import RunResult
+
+    gold_json = {
+        "version": "0.1.0",
+        "queries": [
+            {
+                "id": "q001",
+                "query": "diabetes",
+                "query_type": "simple",
+                "expected_systems": ["ICD10CM"],
+                "expected_codes": {"ICD10CM": ["E11.9"]},
+                "must_include": [],
+                "must_not_include": [],
+            },
+            {
+                "id": "q002",
+                "query": "hypertension",
+                "query_type": "simple",
+                "expected_systems": ["ICD10CM"],
+                "expected_codes": {"ICD10CM": ["I10"]},
+                "must_include": [],
+                "must_not_include": [],
+            },
+        ],
+    }
+    path = tmp_path / "gold.json"
+    path.write_text(json.dumps(gold_json))
+
+    fixed_result = RunResult(
+        query_id="placeholder",
+        query="placeholder",
+        query_type="simple",
+        predicted_systems=[],
+        predicted_codes={},
+        iterations=1,
+        api_calls=0,
+        latency_s=0.1,
+        error=None,
+        summary="",
+    )
+
+    with patch("clinical_codes.evaluation.runner.run_query", return_value=fixed_result) as mock_rq:
+        results = run_gold_set(path)
+
+    assert len(results) == 2
+    assert mock_rq.call_count == 2
+    assert mock_rq.call_args_list[0].args[0].id == "q001"
+    assert mock_rq.call_args_list[1].args[0].id == "q002"
