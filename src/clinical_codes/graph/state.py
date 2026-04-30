@@ -16,7 +16,6 @@ from typing import Annotated, Literal, TypedDict
 
 from pydantic import BaseModel
 
-from clinical_codes.config import MAX_ITERATIONS
 from clinical_codes.schemas import CodeResult, SystemName
 
 
@@ -49,17 +48,3 @@ class GraphState(TypedDict):
     attempt_history: Annotated[list[Attempt], operator.add]
     consolidated: dict[SystemName, list[CodeResult]]  # empty dict until consolidator runs
     summary: str                                       # empty string until summarizer runs
-
-
-def route_after_evaluator(state: GraphState) -> str:
-    # `iteration` is incremented by the planner node at the start of each pass.
-    # After 2 complete planner→executor→evaluator cycles, iteration==2==MAX_ITERATIONS
-    # and the cap forces forward to consolidator regardless of the evaluator's decision.
-    # `evaluator_output` is guaranteed non-None here by graph wiring (evaluator always
-    # runs before this edge fires).
-    # TODO: replace "consolidator"/"planner" with shared constants from builder.py
-    if state["iteration"] >= MAX_ITERATIONS:
-        return "consolidator"
-    if state["evaluator_output"].decision == "refine":
-        return "planner"
-    return "consolidator"
