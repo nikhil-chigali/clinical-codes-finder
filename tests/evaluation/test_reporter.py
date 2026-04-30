@@ -178,9 +178,10 @@ def test_write_report_creates_both_files(tmp_path) -> None:
 
 def test_write_report_json_roundtrips(tmp_path) -> None:
     from clinical_codes.evaluation.metrics import MetricsSummary
-    json_path, _ = write_report(make_summary(), run_id="v0.1.1", output_dir=tmp_path)
+    original = make_summary()
+    json_path, _ = write_report(original, run_id="v0.1.1", output_dir=tmp_path)
     loaded = MetricsSummary.model_validate_json(json_path.read_text(encoding="utf-8"))
-    assert loaded.n_total == make_summary().n_total
+    assert loaded.n_total == original.n_total
 
 
 def test_write_report_filenames_contain_version(tmp_path) -> None:

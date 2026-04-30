@@ -61,9 +61,9 @@ def format_markdown(summary: MetricsSummary) -> str:
 def write_report(
     summary: MetricsSummary,
     run_id: str,
-    output_dir: Path = Path("results"),
+    output_dir: Path | None = None,
 ) -> tuple[Path, Path]:
-    output_dir = Path(output_dir)
+    output_dir = Path(output_dir) if output_dir is not None else Path("results")
     output_dir.mkdir(parents=True, exist_ok=True)
 
     json_path = output_dir / f"eval_{run_id}.json"
