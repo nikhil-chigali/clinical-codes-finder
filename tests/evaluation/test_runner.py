@@ -235,3 +235,4 @@ def test_run_query_real_graph_hypertension() -> None:
     assert SystemName.ICD10CM in result.predicted_systems
     assert len(result.predicted_codes.get(SystemName.ICD10CM, [])) > 0
     assert result.summary != ""
+    assert result.latency_s > 0

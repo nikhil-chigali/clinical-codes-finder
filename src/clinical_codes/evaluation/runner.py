@@ -16,10 +16,10 @@ def _get_graph():
     return _graph
 
 
-async def run_query_async(gold_query: GoldQuery) -> RunResult:
+def run_query(gold_query: GoldQuery) -> RunResult:
     start = time.monotonic()
     try:
-        state = await _get_graph().ainvoke(make_initial_state(gold_query.query))
+        state = asyncio.run(_get_graph().ainvoke(make_initial_state(gold_query.query)))
         latency_s = time.monotonic() - start
         predicted_systems = list(state["consolidated"].keys())
         predicted_codes = {
@@ -55,11 +55,6 @@ async def run_query_async(gold_query: GoldQuery) -> RunResult:
             error=str(exc),
             summary="",
         )
-
-
-def run_query(gold_query: GoldQuery) -> RunResult:
-    """Synchronous wrapper around run_query_async for backwards compatibility."""
-    return asyncio.run(run_query_async(gold_query))
 
 
 def run_gold_set(path: Path | str) -> list[RunResult]:
