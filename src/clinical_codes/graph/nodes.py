@@ -86,14 +86,15 @@ def consolidator(state: GraphState) -> dict:
 
     consolidated: dict[SystemName, list[CodeResult]] = {}
     for system in selected:
-        results = raw.get(system, [])
+        # Sort first so the highest-score entry for each code is seen first,
+        # then dedup by keeping first occurrence. List stays sorted after dedup.
+        results = sorted(raw.get(system, []), key=lambda r: r.score, reverse=True)
         seen: set[str] = set()
         deduped: list[CodeResult] = []
         for r in results:
             if r.code not in seen:
                 seen.add(r.code)
                 deduped.append(r)
-        deduped.sort(key=lambda r: r.score, reverse=True)
         consolidated[system] = deduped[:settings.display_results]
 
     return {"consolidated": consolidated}

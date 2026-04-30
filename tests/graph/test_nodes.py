@@ -126,6 +126,23 @@ def test_consolidator_trims_to_display_results() -> None:
     assert len(result["consolidated"][SystemName.ICD10CM]) == settings.display_results  # 5
 
 
+def test_consolidator_dedup_keeps_highest_score() -> None:
+    from clinical_codes.graph.nodes import consolidator
+
+    # Lower-scored duplicate appears first — must keep the higher-scored entry.
+    state = _make_state(
+        raw_results={
+            SystemName.ICD10CM: [
+                _make_result(SystemName.ICD10CM, "I10", "Low score entry", score=0.5),
+                _make_result(SystemName.ICD10CM, "I10", "High score entry", score=1.0),
+            ]
+        },
+    )
+    result = consolidator(state)
+    kept = result["consolidated"][SystemName.ICD10CM][0]
+    assert kept.score == 1.0
+
+
 def test_consolidator_empty_results_system() -> None:
     from clinical_codes.graph.nodes import consolidator
 
