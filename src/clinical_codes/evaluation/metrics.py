@@ -40,6 +40,24 @@ class MetricsSummary(BaseModel):
     per_query: list[QueryMetrics]
 
 
+def _recall_at_k(
+    predicted_codes: dict[SystemName, list[str]],
+    expected_codes: dict[SystemName, list[str]],
+    k: int = 3,
+) -> float | None:
+    if not expected_codes:
+        return None
+    total = 0
+    hits = 0
+    for system, codes in expected_codes.items():
+        top_k = predicted_codes.get(system, [])[:k]
+        for code in codes:
+            total += 1
+            if code in top_k:
+                hits += 1
+    return hits / total if total else None
+
+
 def _system_f1(
     predicted: list[SystemName],
     expected: list[SystemName],

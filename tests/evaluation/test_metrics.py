@@ -67,3 +67,43 @@ def test_system_f1_partial_overlap() -> None:
     assert p == 0.5
     assert r == 0.5
     assert abs(f1 - 0.5) < 1e-9
+
+
+# ── _recall_at_k ──────────────────────────────────────────────────────────────
+
+from clinical_codes.evaluation.metrics import _recall_at_k
+
+
+def test_recall_at_k_hit_in_top3() -> None:
+    result = _recall_at_k(
+        {SystemName.ICD10CM: ["E11.9", "E10.9", "E11.65"]},
+        {SystemName.ICD10CM: ["E11.9"]},
+    )
+    assert result == 1.0
+
+
+def test_recall_at_k_miss_beyond_k() -> None:
+    # E11.9 at position index 3 (4th result), outside top-3
+    result = _recall_at_k(
+        {SystemName.ICD10CM: ["E10.9", "E11.65", "J45.9", "E11.9"]},
+        {SystemName.ICD10CM: ["E11.9"]},
+        k=3,
+    )
+    assert result == 0.0
+
+
+def test_recall_at_k_miss_query_returns_none() -> None:
+    result = _recall_at_k({}, {})
+    assert result is None
+
+
+def test_recall_at_k_multi_system_partial() -> None:
+    # expected: E11.9 (ICD10CM) + 860975, 6809 (RXNORM)
+    # predicted: E11.9 hit; 860975 miss (not in list); 6809 hit
+    result = _recall_at_k(
+        {SystemName.ICD10CM: ["E11.9"], SystemName.RXNORM: ["6809", "862001"]},
+        {SystemName.ICD10CM: ["E11.9"], SystemName.RXNORM: ["860975", "6809"]},
+        k=3,
+    )
+    assert result is not None
+    assert abs(result - 2 / 3) < 1e-9
