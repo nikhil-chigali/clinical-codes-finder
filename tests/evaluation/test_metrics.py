@@ -107,3 +107,41 @@ def test_recall_at_k_multi_system_partial() -> None:
     )
     assert result is not None
     assert abs(result - 2 / 3) < 1e-9
+
+
+# ── _must_include_hit_rate ────────────────────────────────────────────────────
+
+from clinical_codes.evaluation.metrics import _must_include_hit_rate
+
+
+def test_must_include_hit() -> None:
+    result = _must_include_hit_rate(
+        {SystemName.ICD10CM: ["E11.9", "E10.9"]},
+        ["E11.9"],
+    )
+    assert result == 1.0
+
+
+def test_must_include_miss() -> None:
+    result = _must_include_hit_rate(
+        {SystemName.ICD10CM: ["E10.9"]},
+        ["E11.9"],
+    )
+    assert result == 0.0
+
+
+def test_must_include_empty_returns_none() -> None:
+    result = _must_include_hit_rate(
+        {SystemName.ICD10CM: ["E11.9"]},
+        [],
+    )
+    assert result is None
+
+
+def test_must_include_partial() -> None:
+    # E11.9 present; I10 not present → 1/2
+    result = _must_include_hit_rate(
+        {SystemName.ICD10CM: ["E11.9"]},
+        ["E11.9", "I10"],
+    )
+    assert result == 0.5

@@ -58,6 +58,17 @@ def _recall_at_k(
     return hits / total if total else None
 
 
+def _must_include_hit_rate(
+    predicted_codes: dict[SystemName, list[str]],
+    must_include: list[str],
+) -> float | None:
+    if not must_include:
+        return None
+    all_predicted = {code for codes in predicted_codes.values() for code in codes}
+    hits = sum(1 for code in must_include if code in all_predicted)
+    return hits / len(must_include)
+
+
 def _system_f1(
     predicted: list[SystemName],
     expected: list[SystemName],
