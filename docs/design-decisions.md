@@ -116,7 +116,19 @@ Systems that returned strong results do not need to be re-queried.
 
 ---
 
-## 8. Scaling beyond 6 systems
+## 8. Metrics — `MetricsSummary` aggregate fields are non-optional (`float`, not `float | None`)
+
+**Decision:** `MetricsSummary.top3_recall` and `must_include_hit_rate` are typed `float`, while the equivalent fields on `QueryTypeMetrics` are `float | None`.
+
+**Why:** `MetricsSummary` is the top-level eval result reported to the caller. Allowing `None` there would require reporter.py to handle a case that is nearly impossible in practice (a run with zero non-miss queries and zero queries with `must_include`). The `float` type keeps the reporter simple.
+
+**Convention:** `compute_metrics` substitutes `0.0` for `None` using `if x is not None else 0.0` at the overall level only. `QueryTypeMetrics` preserves `None` so the reporter can render `n/a` for the miss-type slice without special-casing.
+
+**Caveat for reporter.py:** If all queries in a run are miss-type, `MetricsSummary.top3_recall` will be `0.0` rather than `n/a`. Reporter should display the overall top-3 recall row only when `n_total - count_of_miss_queries > 0`, which it can derive from `by_type`.
+
+---
+
+## 9. Scaling beyond 6 systems
 
 The current implementation embeds system descriptions directly in the planner prompt — appropriate for 6 fixed systems. Beyond ~15–20 systems this would become untenable: context cost grows linearly per query, the planner's attention across many options degrades, and onboarding a new system requires editing a central prompt.
 

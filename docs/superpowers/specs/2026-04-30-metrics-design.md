@@ -60,6 +60,8 @@ class MetricsSummary(BaseModel):
 
 `None` fields propagate cleanly — reporter.py renders them as `n/a` in tables without special-casing.
 
+**`MetricsSummary` aggregate convention:** `top3_recall` and `must_include_hit_rate` are `float` (non-optional) at the overall level, while the same fields on `QueryTypeMetrics` are `float | None`. `compute_metrics` substitutes `0.0` for `None` using an explicit `if x is not None else 0.0` check. Reporter should skip the overall top-3 recall row (or show `n/a`) when all queries are miss-type — derivable from `by_type` keys.
+
 ---
 
 ## Individual metric functions (`metrics.py`)
