@@ -145,3 +145,91 @@ def test_must_include_partial() -> None:
         ["E11.9", "I10"],
     )
     assert result == 0.5
+
+
+# ── compute_metrics ───────────────────────────────────────────────────────────
+
+from clinical_codes.evaluation.metrics import compute_metrics
+from clinical_codes.evaluation.schema import GoldQuery, RunResult
+
+
+def _gold(
+    id: str,
+    query_type: str,
+    expected_systems: list[SystemName],
+    expected_codes: dict[SystemName, list[str]],
+    must_include: list[str],
+) -> GoldQuery:
+    return GoldQuery(
+        id=id,
+        query=f"query_{id}",
+        query_type=query_type,
+        expected_systems=expected_systems,
+        expected_codes=expected_codes,
+        must_include=must_include,
+        must_not_include=[],
+    )
+
+
+def _result(
+    query_id: str,
+    query_type: str,
+    predicted_systems: list[SystemName],
+    predicted_codes: dict[SystemName, list[str]],
+    error: str | None = None,
+) -> RunResult:
+    return RunResult(
+        query_id=query_id,
+        query=f"query_{query_id}",
+        query_type=query_type,
+        predicted_systems=predicted_systems,
+        predicted_codes=predicted_codes,
+        iterations=1,
+        api_calls=len(predicted_systems) or 1,
+        latency_s=0.5,
+        error=error,
+        summary="",
+    )
+
+
+def test_compute_metrics_happy_path() -> None:
+    gold = [
+        _gold("q1", "simple", [SystemName.ICD10CM], {SystemName.ICD10CM: ["E11.9"]}, ["E11.9"]),
+        _gold("q2", "simple", [SystemName.ICD10CM], {SystemName.ICD10CM: ["I10"]}, []),
+    ]
+    results = [
+        _result("q1", "simple", [SystemName.ICD10CM], {SystemName.ICD10CM: ["E11.9", "E10.9"]}),
+        _result("q2", "simple", [], {}, error="timeout"),
+    ]
+    summary = compute_metrics(results, gold)
+
+    assert summary.n_total == 2
+    assert summary.n_errors == 1
+    assert summary.system_selection_f1 < 1.0  # error on q2 drags F1 below 1.0
+    assert "simple" in summary.by_type
+    assert summary.by_type["simple"].n == 2
+    assert len(summary.per_query) == 2
+
+
+def test_compute_metrics_miss_query_excluded_from_recall() -> None:
+    gold = [_gold("q1", "miss", [], {}, [])]
+    results = [_result("q1", "miss", [], {})]
+    summary = compute_metrics(results, gold)
+
+    assert summary.system_selection_f1 == 1.0
+    assert summary.per_query[0].recall_at_3 is None
+    assert summary.by_type["miss"].top3_recall is None
+
+
+def test_compute_metrics_by_type_keys() -> None:
+    gold = [
+        _gold("q1", "simple", [SystemName.ICD10CM], {SystemName.ICD10CM: ["E11.9"]}, []),
+        _gold("q2", "multi_system", [SystemName.ICD10CM, SystemName.LOINC], {}, []),
+    ]
+    results = [
+        _result("q1", "simple", [SystemName.ICD10CM], {SystemName.ICD10CM: ["E11.9"]}),
+        _result("q2", "multi_system", [SystemName.ICD10CM, SystemName.LOINC], {}),
+    ]
+    summary = compute_metrics(results, gold)
+
+    assert set(summary.by_type.keys()) == {"simple", "multi_system"}

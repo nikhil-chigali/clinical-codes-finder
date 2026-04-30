@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 
+from clinical_codes.evaluation.schema import GoldQuery, RunResult
 from clinical_codes.schemas import SystemName
 
 
@@ -40,6 +41,17 @@ class MetricsSummary(BaseModel):
     per_query: list[QueryMetrics]
 
 
+def _system_f1(
+    predicted: list[SystemName],
+    expected: list[SystemName],
+) -> tuple[float, float, float]:
+    tp = len(set(predicted) & set(expected))
+    precision = tp / len(predicted) if predicted else 1.0
+    recall = tp / len(expected) if expected else 1.0
+    f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
+    return precision, recall, f1
+
+
 def _recall_at_k(
     predicted_codes: dict[SystemName, list[str]],
     expected_codes: dict[SystemName, list[str]],
@@ -69,12 +81,62 @@ def _must_include_hit_rate(
     return hits / len(must_include)
 
 
-def _system_f1(
-    predicted: list[SystemName],
-    expected: list[SystemName],
-) -> tuple[float, float, float]:
-    tp = len(set(predicted) & set(expected))
-    precision = tp / len(predicted) if predicted else 1.0
-    recall = tp / len(expected) if expected else 1.0
-    f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
-    return precision, recall, f1
+def _aggregate_query_metrics(qms: list[QueryMetrics]) -> dict:
+    n = len(qms)
+    recall_vals = [qm.recall_at_3 for qm in qms if qm.recall_at_3 is not None]
+    mi_vals = [qm.must_include_hit_rate for qm in qms if qm.must_include_hit_rate is not None]
+    return {
+        "n": n,
+        "system_selection_f1": sum(qm.system_f1 for qm in qms) / n if n else 0.0,
+        "top3_recall": sum(recall_vals) / len(recall_vals) if recall_vals else None,
+        "must_include_hit_rate": sum(mi_vals) / len(mi_vals) if mi_vals else None,
+        "mean_iterations": sum(qm.iterations for qm in qms) / n if n else 0.0,
+        "mean_api_calls": sum(qm.api_calls for qm in qms) / n if n else 0.0,
+    }
+
+
+def compute_metrics(
+    results: list[RunResult],
+    gold: list[GoldQuery],
+) -> MetricsSummary:
+    gold_by_id = {gq.id: gq for gq in gold}
+    per_query: list[QueryMetrics] = []
+    for result in results:
+        gq = gold_by_id[result.query_id]
+        p, r, f1 = _system_f1(result.predicted_systems, gq.expected_systems)
+        per_query.append(QueryMetrics(
+            query_id=result.query_id,
+            query=result.query,
+            query_type=result.query_type,
+            system_precision=p,
+            system_recall=r,
+            system_f1=f1,
+            recall_at_3=_recall_at_k(result.predicted_codes, gq.expected_codes),
+            must_include_hit_rate=_must_include_hit_rate(result.predicted_codes, gq.must_include),
+            iterations=result.iterations,
+            api_calls=result.api_calls,
+            latency_s=result.latency_s,
+            error=result.error,
+        ))
+
+    by_type_groups: dict[str, list[QueryMetrics]] = {}
+    for qm in per_query:
+        by_type_groups.setdefault(qm.query_type, []).append(qm)
+
+    by_type = {
+        qt: QueryTypeMetrics(query_type=qt, **_aggregate_query_metrics(qms))
+        for qt, qms in by_type_groups.items()
+    }
+
+    overall = _aggregate_query_metrics(per_query)
+    return MetricsSummary(
+        n_total=len(results),
+        n_errors=sum(1 for r in results if r.error is not None),
+        system_selection_f1=overall["system_selection_f1"],
+        top3_recall=overall["top3_recall"] or 0.0,
+        must_include_hit_rate=overall["must_include_hit_rate"] or 0.0,
+        mean_iterations=overall["mean_iterations"],
+        mean_api_calls=overall["mean_api_calls"],
+        by_type=by_type,
+        per_query=per_query,
+    )
