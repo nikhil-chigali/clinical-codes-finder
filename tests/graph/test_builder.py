@@ -106,3 +106,12 @@ def test_route_one_below_cap_still_refines() -> None:
         ),
     )
     assert route_after_evaluator(state) == NODE_PLANNER
+
+
+# ── build_graph ────────────────────────────────────────────────────────────────
+
+def test_graph_compiles() -> None:
+    from clinical_codes.graph.builder import build_graph
+
+    graph = build_graph()
+    assert graph is not None
