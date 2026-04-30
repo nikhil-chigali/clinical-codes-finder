@@ -12,8 +12,8 @@ from clinical_codes.graph.state import Attempt, EvaluatorOutput, GraphState, Pla
 from clinical_codes.schemas import CodeResult, SystemName
 from clinical_codes.tools import CLIENTS
 
-# api_key passed explicitly so construction succeeds when ANTHROPIC_API_KEY is
-# absent at test time — all LLM calls are monkeypatched in tests.
+# api_key passed explicitly to all three LLM clients so construction succeeds
+# when ANTHROPIC_API_KEY is absent at test time (all LLM calls are mocked).
 _planner_chain = (
     ChatAnthropic(
         model=settings.llm_model,

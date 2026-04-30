@@ -293,12 +293,11 @@ async def test_evaluator_appends_attempt() -> None:
     assert attempt.evaluator_output == eo
 
 
-# --- Summarizer ---
+# ── Summarizer ────────────────────────────────────────────────────────────────
 
 
 async def test_summarizer_writes_summary() -> None:
     from clinical_codes.graph.nodes import summarizer
-    from unittest.mock import MagicMock
 
     po = _make_planner_output()
     consolidated = {SystemName.ICD10CM: [_make_result(SystemName.ICD10CM, "I10", "Hypertension")]}
@@ -308,8 +307,11 @@ async def test_summarizer_writes_summary() -> None:
 
     with patch("clinical_codes.graph.nodes._summarizer_llm") as mock_llm:
         mock_llm.ainvoke = AsyncMock(return_value=fake_response)
-        result = await summarizer(
-            _make_state(planner_output=po, consolidated=consolidated)
-        )
+        with patch("clinical_codes.graph.nodes.build_summarizer_messages") as mock_build:
+            mock_build.return_value = []
+            result = await summarizer(
+                _make_state(planner_output=po, consolidated=consolidated)
+            )
+            mock_build.assert_called_once_with("hypertension", consolidated, po.rationale)
 
     assert result["summary"] == "Hypertension is a condition..."
