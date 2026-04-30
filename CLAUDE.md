@@ -15,8 +15,9 @@ cp .env.example .env       # add ANTHROPIC_API_KEY
 uv run pytest              # all tests
 uv run pytest tests/graph/test_nodes.py  # single test file
 
-# Not yet implemented (pending evaluation, app, scripts phases):
-# uv run python -m scripts.run_query "metformin 500 mg"
+uv run python -m scripts.run_query "metformin 500 mg"  # CLI query runner
+
+# Not yet implemented (pending app, scripts phases):
 # uv run streamlit run src/clinical_codes/app/streamlit_app.py
 # uv run python -m scripts.run_eval --gold data/gold/gold_v0.1.1.json
 ```
@@ -54,8 +55,9 @@ Graph is assembled in `graph/builder.py`. State shape lives in `graph/state.py`.
 | `evaluation/runner.py` — run_query, run_gold_set, lazy graph singleton | ✅ Done |
 | `evaluation/metrics.py` — QueryMetrics, MetricsSummary, compute_metrics | ✅ Done |
 | `evaluation/reporter.py` — results table + markdown summary | ✅ Done |
+| `scripts/run_query.py` — CLI query runner (Rich + Typer) | ✅ Done |
 | `app/streamlit_app.py` — Streamlit UI | 🔲 Pending |
-| `scripts/run_query.py`, `scripts/run_eval.py` | 🔲 Pending |
+| `scripts/run_eval.py` — evaluation runner CLI | 🔲 Pending |
 
 ## Project layout
 
@@ -66,6 +68,7 @@ src/clinical_codes/
 ├── tools/             # per-system Clinical Tables API wrappers
 ├── graph/             # LangGraph nodes, state, prompts, builder
 ├── evaluation/        # gold set schema, runner, metrics, reporter
+├── cli/               # Rich/Typer display helpers (used by scripts/run_query.py)
 └── app/               # Streamlit UI
 
 data/gold/             # versioned gold eval sets (do not overwrite)

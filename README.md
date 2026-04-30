@@ -68,8 +68,9 @@ Full trade-off analysis in [`docs/design-decisions.md`](docs/design-decisions.md
 | `evaluation/schema.py`, `runner.py` — gold set schema + runner | ✅ Done |
 | `evaluation/metrics.py` — system-selection F1, recall@3, must-include hit rate, aggregator | ✅ Done |
 | `evaluation/reporter.py` — results table + markdown summary | ✅ Done |
+| `scripts/run_query.py` — CLI query runner (Rich + Typer) | ✅ Done |
 | `app/streamlit_app.py` — Streamlit UI | 🔲 Pending |
-| `scripts/run_query.py`, `scripts/run_eval.py` | 🔲 Pending |
+| `scripts/run_eval.py` — evaluation runner CLI | 🔲 Pending |
 
 ## Setup
 
@@ -77,16 +78,16 @@ Full trade-off analysis in [`docs/design-decisions.md`](docs/design-decisions.md
 git clone <repo-url> && cd clinical-codes-finder
 uv sync                    # or: pip install -e .
 cp .env.example .env       # add ANTHROPIC_API_KEY
-uv run pytest              # confirm 94 tests pass
+uv run pytest              # confirm 102 tests pass
 ```
 
 ## Usage
 
-> **Note:** CLI, UI, and eval commands require pending phases to be implemented first.
-
-**CLI** *(pending `scripts/run_query.py`)*:
+**CLI:**
 ```bash
 uv run python -m scripts.run_query "metformin 500 mg"
+uv run python -m scripts.run_query "metformin 500 mg" --output json | jq .
+uv run python -m scripts.run_query "metformin 500 mg" --verbose
 ```
 
 **Streamlit UI** *(pending `app/streamlit_app.py`)*:
@@ -94,7 +95,7 @@ uv run python -m scripts.run_query "metformin 500 mg"
 uv run streamlit run src/clinical_codes/app/streamlit_app.py
 ```
 
-**Run the eval** *(pending `evaluation/` and `scripts/run_eval.py`)*:
+**Run the eval** *(pending `scripts/run_eval.py`)*:
 ```bash
 uv run python -m scripts.run_eval --gold data/gold/gold_v0.1.1.json
 ```
@@ -185,6 +186,10 @@ clinical-codes-finder/
 │       │   ├── metrics.py             # system-selection F1, recall@k, mean iters, mean API calls
 │       │   └── reporter.py            # writes results table + markdown summary
 │       │
+│       ├── cli/                       # Rich/Typer display helpers
+│       │   ├── __init__.py
+│       │   └── display.py             # render_results, render_error, update_status
+│       │
 │       └── app/                       # ← Phase 5
 │           ├── __init__.py
 │           └── streamlit_app.py
@@ -244,4 +249,4 @@ clinical-codes-finder/
 
 ## Stack
 
-LangGraph · Claude Anthropic · Pydantic · httpx · Streamlit · pytest · uv
+LangGraph · Claude Anthropic · Pydantic · httpx · Rich · Typer · Streamlit · pytest · uv
