@@ -67,7 +67,7 @@ Full trade-off analysis in [`docs/design-decisions.md`](docs/design-decisions.md
 | `graph/builder.py` — graph assembly | ✅ Done |
 | `evaluation/schema.py`, `runner.py` — gold set schema + runner | ✅ Done |
 | `evaluation/metrics.py` — system-selection F1, recall@3, must-include hit rate, aggregator | ✅ Done |
-| `evaluation/reporter.py` — results table + markdown summary | 🔲 Pending |
+| `evaluation/reporter.py` — results table + markdown summary | ✅ Done |
 | `app/streamlit_app.py` — Streamlit UI | 🔲 Pending |
 | `scripts/run_query.py`, `scripts/run_eval.py` | 🔲 Pending |
 
@@ -77,7 +77,7 @@ Full trade-off analysis in [`docs/design-decisions.md`](docs/design-decisions.md
 git clone <repo-url> && cd clinical-codes-finder
 uv sync                    # or: pip install -e .
 cp .env.example .env       # add ANTHROPIC_API_KEY
-uv run pytest              # confirm 85 tests pass
+uv run pytest              # confirm 94 tests pass
 ```
 
 ## Usage
@@ -213,7 +213,8 @@ clinical-codes-finder/
 │   │   ├── test_consolidator.py       # pure function, no mocks needed
 │   │   └── test_graph_e2e.py          # full pipeline with mocked tools
 │   └── evaluation/
-│       └── test_metrics.py
+│       ├── test_metrics.py
+│       └── test_reporter.py
 │
 └── notebooks/                         # exploration only, not a deliverable
     └── 01_clinical_tables_api_probe.ipynb

@@ -53,7 +53,7 @@ Graph is assembled in `graph/builder.py`. State shape lives in `graph/state.py`.
 | `evaluation/schema.py` — GoldQuery, GoldSet, RunResult | ✅ Done |
 | `evaluation/runner.py` — run_query, run_gold_set, lazy graph singleton | ✅ Done |
 | `evaluation/metrics.py` — QueryMetrics, MetricsSummary, compute_metrics | ✅ Done |
-| `evaluation/reporter.py` — results table + markdown summary | 🔲 Pending |
+| `evaluation/reporter.py` — results table + markdown summary | ✅ Done |
 | `app/streamlit_app.py` — Streamlit UI | 🔲 Pending |
 | `scripts/run_query.py`, `scripts/run_eval.py` | 🔲 Pending |
 
