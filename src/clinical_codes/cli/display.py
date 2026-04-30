@@ -1,8 +1,21 @@
 from rich.console import Console
+from rich.panel import Panel
 from rich.rule import Rule
+from rich.status import Status
 from rich.table import Table
 
 from clinical_codes.schemas import CodeResult, SystemName
+
+_NODE_LABELS: dict[str, str] = {
+    "planner": "Searching...",
+    "executor": "Evaluating...",
+    "evaluator": "Consolidating...",
+    "consolidator": "Summarizing...",
+}
+
+
+def update_status(status: Status, node_name: str) -> None:
+    status.update(_NODE_LABELS.get(node_name, f"{node_name}..."))
 
 
 def render_results(
@@ -30,3 +43,10 @@ def render_results(
             table.add_row(*row)
 
     console.print(table)
+
+
+def render_error(console: Console, message: str, tb: str | None = None) -> None:
+    body = message
+    if tb:
+        body += f"\n\n[dim]{tb}[/dim]"
+    console.print(Panel(body, title="[red]Error[/red]", border_style="red"))

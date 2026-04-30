@@ -56,3 +56,43 @@ def test_render_results_verbose_shows_score_column() -> None:
     output = buf.getvalue()
     assert "Score" in output
     assert "0.75" in output
+
+
+# ── render_error ──────────────────────────────────────────────────────────────
+
+
+def test_render_error_message_only() -> None:
+    from clinical_codes.cli.display import render_error
+
+    console, buf = _make_console()
+    render_error(console, "Something went wrong")
+    output = buf.getvalue()
+    assert "Something went wrong" in output
+    assert "Traceback" not in output
+
+
+def test_render_error_with_traceback() -> None:
+    from clinical_codes.cli.display import render_error
+
+    console, buf = _make_console()
+    render_error(
+        console,
+        "Something went wrong",
+        tb="Traceback (most recent call last):\n  File 'x.py', line 1\n    pass",
+    )
+    output = buf.getvalue()
+    assert "Something went wrong" in output
+    assert "Traceback" in output
+
+
+# ── update_status ─────────────────────────────────────────────────────────────
+
+
+def test_update_status_maps_planner_to_searching() -> None:
+    from unittest.mock import MagicMock
+
+    from clinical_codes.cli.display import update_status
+
+    status = MagicMock()
+    update_status(status, "planner")
+    status.update.assert_called_once_with("Searching...")
