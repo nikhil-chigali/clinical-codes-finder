@@ -1,4 +1,5 @@
 from rich.console import Console
+from rich.markup import escape
 from rich.panel import Panel
 from rich.rule import Rule
 from rich.status import Status
@@ -48,5 +49,5 @@ def render_results(
 def render_error(console: Console, message: str, tb: str | None = None) -> None:
     body = message
     if tb:
-        body += f"\n\n[dim]{tb}[/dim]"
+        body += f"\n\n[dim]{escape(tb)}[/dim]"
     console.print(Panel(body, title="[red]Error[/red]", border_style="red"))

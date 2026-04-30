@@ -78,11 +78,12 @@ def test_render_error_with_traceback() -> None:
     render_error(
         console,
         "Something went wrong",
-        tb="Traceback (most recent call last):\n  File 'x.py', line 1\n    pass",
+        tb="Traceback (most recent call last):\n  KeyError: [missing_key]",
     )
     output = buf.getvalue()
     assert "Something went wrong" in output
     assert "Traceback" in output
+    assert "[missing_key]" in output  # brackets must survive, not be stripped as markup
 
 
 # ── update_status ─────────────────────────────────────────────────────────────
