@@ -134,3 +134,56 @@ def test_consolidator_empty_results_system() -> None:
     result = consolidator(state)
     assert SystemName.ICD10CM in result["consolidated"]
     assert result["consolidated"][SystemName.ICD10CM] == []
+
+
+# ── Planner ───────────────────────────────────────────────────────────────────
+
+async def test_planner_increments_iteration() -> None:
+    from clinical_codes.graph.nodes import planner
+
+    with patch("clinical_codes.graph.nodes._planner_chain") as mock_chain:
+        mock_chain.ainvoke = AsyncMock(return_value=_make_planner_output())
+        result = await planner(_make_state(iteration=0))
+    assert result["iteration"] == 1
+
+
+async def test_planner_writes_planner_output() -> None:
+    from clinical_codes.graph.nodes import planner
+
+    expected = _make_planner_output()
+    with patch("clinical_codes.graph.nodes._planner_chain") as mock_chain:
+        mock_chain.ainvoke = AsyncMock(return_value=expected)
+        result = await planner(_make_state(iteration=0))
+    assert result["planner_output"] == expected
+
+
+async def test_planner_first_pass_passes_empty_history() -> None:
+    from clinical_codes.graph.nodes import planner
+
+    with patch("clinical_codes.graph.nodes._planner_chain") as mock_chain:
+        mock_chain.ainvoke = AsyncMock(return_value=_make_planner_output())
+        with patch("clinical_codes.graph.nodes.build_planner_messages") as mock_build:
+            mock_build.return_value = []
+            await planner(_make_state(attempt_history=[]))
+    mock_build.assert_called_once_with("hypertension", [])
+
+
+async def test_planner_refinement_passes_attempt_history() -> None:
+    from clinical_codes.graph.nodes import planner
+
+    attempt = Attempt(
+        iteration=1,
+        planner_output=_make_planner_output(),
+        raw_results={},
+        evaluator_output=_make_evaluator_output(
+            decision="refine",
+            weak=[SystemName.ICD10CM],
+            feedback="ICD-10-CM returned irrelevant results.",
+        ),
+    )
+    with patch("clinical_codes.graph.nodes._planner_chain") as mock_chain:
+        mock_chain.ainvoke = AsyncMock(return_value=_make_planner_output())
+        with patch("clinical_codes.graph.nodes.build_planner_messages") as mock_build:
+            mock_build.return_value = []
+            await planner(_make_state(attempt_history=[attempt]))
+    mock_build.assert_called_once_with("hypertension", [attempt])

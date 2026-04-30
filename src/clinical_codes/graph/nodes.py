@@ -1,6 +1,48 @@
+import asyncio
+
+from langchain_anthropic import ChatAnthropic
+
 from clinical_codes.config import settings
-from clinical_codes.graph.state import GraphState
+from clinical_codes.graph.prompts import (
+    build_evaluator_messages,
+    build_planner_messages,
+    build_summarizer_messages,
+)
+from clinical_codes.graph.state import Attempt, EvaluatorOutput, GraphState, PlannerOutput
 from clinical_codes.schemas import CodeResult, SystemName
+from clinical_codes.tools import CLIENTS
+
+# api_key passed explicitly so construction succeeds when ANTHROPIC_API_KEY is
+# absent at test time — all LLM calls are monkeypatched in tests.
+_planner_chain = (
+    ChatAnthropic(
+        model=settings.llm_model,
+        temperature=settings.planner_temperature,
+        api_key=settings.anthropic_api_key or "placeholder-for-tests",
+    )
+    .with_structured_output(PlannerOutput)
+)
+
+_evaluator_chain = (
+    ChatAnthropic(
+        model=settings.llm_model,
+        temperature=settings.evaluator_temperature,
+        api_key=settings.anthropic_api_key or "placeholder-for-tests",
+    )
+    .with_structured_output(EvaluatorOutput)
+)
+
+_summarizer_llm = ChatAnthropic(
+    model=settings.llm_model,
+    temperature=settings.summarizer_temperature,
+    api_key=settings.anthropic_api_key or "placeholder-for-tests",
+)
+
+
+async def planner(state: GraphState) -> dict:
+    messages = build_planner_messages(state["query"], state["attempt_history"])
+    output: PlannerOutput = await _planner_chain.ainvoke(messages)
+    return {"planner_output": output, "iteration": state["iteration"] + 1}
 
 
 def consolidator(state: GraphState) -> dict:
