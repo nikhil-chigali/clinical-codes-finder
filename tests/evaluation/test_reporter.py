@@ -157,8 +157,8 @@ def test_failures_includes_error_query() -> None:
 
 def test_failures_includes_low_f1_query() -> None:
     md = format_markdown(make_summary())
-    # q001 has system_f1=0.5 < 1.0 — its query_id must appear in the failures table
-    assert "q001" in md
+    failures_section = md.split("## Failures")[1]
+    assert "q001" in failures_section
 
 
 def test_no_failures_shows_none() -> None:
