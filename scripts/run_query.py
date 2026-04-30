@@ -37,7 +37,7 @@ def run(
     ] = False,
 ) -> None:
     if output not in ("table", "json"):
-        err_console = Console()
+        err_console = Console(stderr=True)
         render_error(err_console, f"Invalid --output value '{output}'. Must be 'table' or 'json'.")
         raise typer.Exit(code=1)
 
@@ -92,7 +92,7 @@ async def _run_async(
                             status.stop()
                             console.print(Rule("Summary"))
                             summary_started = True
-                        console.print(content, end="")
+                        console.out(content, end="")
     except Exception:
         tb = traceback.format_exc() if verbose else None
         render_error(console, "An error occurred while running the query.", tb=tb)
