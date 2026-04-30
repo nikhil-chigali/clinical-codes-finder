@@ -28,3 +28,5 @@ class Settings(BaseSettings):
 settings = Settings()
 
 MAX_ITERATIONS = 2  # cap enforced in route_after_evaluator, not in LLM prompts
+NODE_PLANNER = "planner"
+NODE_CONSOLIDATOR = "consolidator"
