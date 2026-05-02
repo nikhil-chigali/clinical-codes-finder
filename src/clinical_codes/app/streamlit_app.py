@@ -77,12 +77,7 @@ if search and query.strip():
     with st.expander("🔍 Reasoning trace"):
         if len(attempt_history) > 1:
             n = len(attempt_history)
-            st.markdown(
-                f'<span style="background:#5a3a2a;color:#e8a87c;padding:2px 10px;'
-                f'border-radius:12px;font-size:13px">🔁 {n} iterations</span>',
-                unsafe_allow_html=True,
-            )
-            st.write("")
+            st.caption(f"🔁 {n} iterations")
         for i, attempt in enumerate(attempt_history):
             systems = ", ".join(s.value for s in attempt.planner_output.selected_systems)
             st.markdown(f"**Iteration {attempt.iteration}** · {systems}")
