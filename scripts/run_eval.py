@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
+from pydantic import ValidationError
 from rich.console import Console
 from rich.rule import Rule
 from rich.table import Table
@@ -27,18 +28,23 @@ def run(
         Path, typer.Option(help="Directory to write results")
     ] = Path("results"),
 ) -> None:
+    err_console = Console(stderr=True)
     console = Console()
 
     if not settings.anthropic_api_key:
-        render_error(console, "ANTHROPIC_API_KEY is not set. Add it to your .env file.")
+        render_error(err_console, "ANTHROPIC_API_KEY is not set. Add it to your .env file.")
         raise typer.Exit(code=1)
 
     if not gold.exists():
-        render_error(console, f"Gold file not found: {gold}")
+        render_error(err_console, f"Gold file not found: {gold}")
         raise typer.Exit(code=1)
 
-    data = json.loads(gold.read_text(encoding="utf-8"))
-    gold_set = GoldSet.model_validate(data)
+    try:
+        data = json.loads(gold.read_text(encoding="utf-8"))
+        gold_set = GoldSet.model_validate(data)
+    except (json.JSONDecodeError, ValidationError) as e:
+        render_error(err_console, f"Invalid gold file: {e}")
+        raise typer.Exit(code=1)
 
     run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
     console.print(Rule(f"Eval run {run_id} — {len(gold_set.queries)} queries"))
