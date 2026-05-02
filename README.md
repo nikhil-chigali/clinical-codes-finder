@@ -69,7 +69,7 @@ Full trade-off analysis in [`docs/design-decisions.md`](docs/design-decisions.md
 | `evaluation/metrics.py` — system-selection F1, recall@3, must-include hit rate, aggregator | ✅ Done |
 | `evaluation/reporter.py` — results table + markdown summary | ✅ Done |
 | `scripts/run_query.py` — CLI query runner (Rich + Typer) | ✅ Done |
-| `app/streamlit_app.py` — Streamlit UI | 🔲 Pending |
+| `app/streamlit_app.py` — Streamlit UI | ✅ Done |
 | `scripts/run_eval.py` — evaluation runner CLI | 🔲 Pending |
 
 ## Setup
@@ -90,7 +90,7 @@ uv run python -m scripts.run_query "metformin 500 mg" --output json | jq .
 uv run python -m scripts.run_query "metformin 500 mg" --verbose
 ```
 
-**Streamlit UI** *(pending `app/streamlit_app.py`)*:
+**Streamlit UI:**
 ```bash
 uv run streamlit run src/clinical_codes/app/streamlit_app.py
 ```
