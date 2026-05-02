@@ -20,8 +20,7 @@ uv run python -m scripts.run_query "metformin 500 mg"  # CLI query runner
 # Streamlit UI:
 uv run streamlit run src/clinical_codes/app/streamlit_app.py
 
-# Not yet implemented:
-# uv run python -m scripts.run_eval --gold data/gold/gold_v0.1.1.json
+uv run python -m scripts.run_eval --gold data/gold/gold_v0.1.1.json
 ```
 
 ## Architecture
@@ -59,7 +58,7 @@ Graph is assembled in `graph/builder.py`. State shape lives in `graph/state.py`.
 | `evaluation/reporter.py` — results table + markdown summary | ✅ Done |
 | `scripts/run_query.py` — CLI query runner (Rich + Typer) | ✅ Done |
 | `app/streamlit_app.py` — Streamlit UI | ✅ Done |
-| `scripts/run_eval.py` — evaluation runner CLI | 🔲 Pending |
+| `scripts/run_eval.py` — evaluation runner CLI | ✅ Done |
 
 ## Project layout
 
