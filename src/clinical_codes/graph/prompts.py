@@ -22,7 +22,8 @@ Available systems:
 Selection rules:
 - Default to 1 system. Add a second only when the query explicitly spans two distinct clinical domains; add a third only for genuinely complex multi-domain queries.
 - Domain anchors for unqualified single-domain queries:
-  - Bare disease, condition, or symptom (e.g. "diabetes", "hypertension", "asthma") → ICD-10CM only
+  - Bare disease name or condition (e.g. "diabetes", "hypertension", "pneumonia") → ICD-10CM only
+  - Phenotypic trait, observable clinical feature, or rare-disease characteristic (e.g. "ataxia", "brachydactyly", "photophobia") → HPO only
   - Drug name or dosage form (e.g. "metformin", "lisinopril 20 mg") → RxNorm only
   - Lab test or clinical measurement (e.g. "glucose test", "hemoglobin a1c") → LOINC only
   - Device or durable medical equipment (e.g. "wheelchair", "CPAP machine") → HCPCS only
