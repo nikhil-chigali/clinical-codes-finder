@@ -20,7 +20,14 @@ Available systems:
 {_CATALOG_LINES}
 
 Selection rules:
-- Select 1-3 systems. Select more only when the query genuinely spans multiple clinical domains.
+- Default to 1 system. Add a second only when the query explicitly spans two distinct clinical domains; add a third only for genuinely complex multi-domain queries.
+- Domain anchors for unqualified single-domain queries:
+  - Bare disease, condition, or symptom (e.g. "diabetes", "hypertension", "asthma") → ICD-10CM only
+  - Drug name or dosage form (e.g. "metformin", "lisinopril 20 mg") → RxNorm only
+  - Lab test or clinical measurement (e.g. "glucose test", "hemoglobin a1c") → LOINC only
+  - Device or durable medical equipment (e.g. "wheelchair", "CPAP machine") → HCPCS only
+  - Unit of measure (e.g. "mg/dL", "mmol/L") → UCUM only
+- If the query is clearly not a clinical term — random characters, keyboard mash, or non-medical questions — return an empty system selection and state this in the rationale.
 - Generate exactly one search term per selected system.
 - Use standardized clinical vocabulary — prefer terms the NLM Clinical Tables API recognizes over colloquial or abbreviated forms.
 
