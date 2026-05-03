@@ -4,33 +4,7 @@ Captures the key architectural decisions made during design sessions, with ratio
 
 ---
 
-## 1. LLM framework — `langchain-anthropic` with `.with_structured_output()`
-
-**Decision:** Use `langchain-anthropic`'s `ChatAnthropic` with `.with_structured_output(PlannerOutput)` / `.with_structured_output(EvaluatorOutput)` rather than the bare Anthropic SDK or LangGraph's built-in model bindings.
-
-**Why:**
-- Eliminates manual JSON parsing for structured outputs — typed Pydantic models come back directly.
-- Integrates naturally with LangGraph node return types.
-- The bare SDK requires tool-use boilerplate or manual JSON extraction; `with_structured_output` handles this transparently.
-
-**Trade-off:** Adds `langchain-anthropic` as a dependency. Accepted — LangGraph already presupposes this ecosystem.
-
----
-
-## 2. Prompt module design — formatting functions, not template objects
-
-**Decision:** `graph/prompts.py` exports three formatting functions (`build_planner_messages`, `build_evaluator_messages`, `build_summarizer_messages`), each returning `list[BaseMessage]`. No `ChatPromptTemplate` objects, no raw string constants.
-
-**Why:**
-- The planner's message shape differs between first pass and refinement (different human message content). A function handles this branching cleanly; a template object requires two templates and caller-side selection logic.
-- Node bodies stay clean — they call a function and pipe the result to the model chain.
-- Functions are straightforward to unit test (call with args, assert on returned messages).
-
-**Trade-off:** Loses LangChain's template validation. Acceptable — the functions are simple Python, easier to reason about than template DSL.
-
----
-
-## 3. API rank score — position in result list, not semantic similarity
+## 1. API rank score — position in result list, not semantic similarity
 
 **Decision:** The `score` field on `CodeResult` is derived from the NLM API's own result ordering: `score = (total - rank) / total`, mapping position in the result list to [0, 1]. Rank 0 (top result) always gets 1.0; rank n-1 gets 1/n.
 
@@ -38,13 +12,13 @@ Captures the key architectural decisions made during design sessions, with ratio
 
 **What the score is used for:**
 - **Consolidator** — orders results within each system to select the top `display_results` (5) for the final response. The API's ordering is a reasonable proxy for term relevance.
-- **Not used by the evaluator** — the evaluator performs semantic relevance judgment instead (see §4).
+- **Not used by the evaluator** — the evaluator performs semantic relevance judgment instead (see §2).
 
 **`confidence_threshold` in `config.py`:** Currently vestigial. It was designed for a threshold-based evaluator check that was superseded by semantic evaluation. Retained in config for potential future use (e.g., a consolidator filter).
 
 ---
 
-## 4. Evaluator design — diagnose, don't prescribe
+## 2. Evaluator design — diagnose, don't prescribe
 
 **Decision:** The evaluator identifies weak systems and explains *why* results are weak, but does **not** prescribe remediation (different search terms, alternate systems). Remediation is the planner's responsibility.
 
@@ -65,7 +39,7 @@ Captures the key architectural decisions made during design sessions, with ratio
 
 ---
 
-## 5. Planner refinement — options and `selected_systems` mutability
+## 3. Planner refinement — options and `selected_systems` mutability
 
 **Decision:** On refinement, the planner may:
 1. Retry a weak system with a different search term.
@@ -76,11 +50,9 @@ Captures the key architectural decisions made during design sessions, with ratio
 
 **State design implication:** `selected_systems` in `PlannerOutput` and `GraphState` is the planner's per-iteration selection, not a stable field. The `Attempt` model captures each iteration's full `planner_output`, so the selection history is preserved in `attempt_history`. The executor and evaluator read from the current `planner_output`; the summarizer reads from the final one.
 
-**Note:** This supersedes the original state spec's claim that `selected_systems` "does not change between iterations." The state.py docstring will be updated accordingly.
-
 ---
 
-## 6. Refinement context — summary, not full raw results
+## 4. Refinement context — summary, not full raw results
 
 **Decision:** The planner's refinement human message includes prior search terms, weak system names, and evaluator feedback prose — but **not** the full raw results from the prior iteration.
 
@@ -101,7 +73,7 @@ Systems that returned strong results do not need to be re-queried.
 
 ---
 
-## 7. Summarizer — audience and guidelines
+## 5. Summarizer — audience and guidelines
 
 **Decision:** The summarizer writes for a **non-technical audience** (patient, general clinician, or student). It does not surface which systems were excluded by the planner.
 
@@ -112,23 +84,9 @@ Systems that returned strong results do not need to be re-queried.
 
 **Tone:** Plain English. Explain medical terms when they appear. No jargon without definition.
 
-**Source:** Per `scope.md` — "plain-English explanation" and "for a potentially non-technical audience."
-
 ---
 
-## 8. Metrics — `MetricsSummary` aggregate fields are non-optional (`float`, not `float | None`)
-
-**Decision:** `MetricsSummary.top3_recall` and `must_include_hit_rate` are typed `float`, while the equivalent fields on `QueryTypeMetrics` are `float | None`.
-
-**Why:** `MetricsSummary` is the top-level eval result reported to the caller. Allowing `None` there would require reporter.py to handle a case that is nearly impossible in practice (a run with zero non-miss queries and zero queries with `must_include`). The `float` type keeps the reporter simple.
-
-**Convention:** `compute_metrics` substitutes `0.0` for `None` using `if x is not None else 0.0` at the overall level only. `QueryTypeMetrics` preserves `None` so the reporter can render `n/a` for the miss-type slice without special-casing.
-
-**Caveat for reporter.py:** If all queries in a run are miss-type, `MetricsSummary.top3_recall` will be `0.0` rather than `n/a`. Reporter should display the overall top-3 recall row only when `n_total - count_of_miss_queries > 0`, which it can derive from `by_type`.
-
----
-
-## 10. RxNorm two-step dose-string fallback
+## 6. RxNorm two-step dose-string fallback
 
 **Decision:** Override `RxNormClient.search()` to detect dose strings in the query, strip the dose to extract the drug name, retry the API with just the drug name, and expand the response into per-strength `CodeResult`s ranked so the matching dose appears first.
 
@@ -152,38 +110,46 @@ The API is designed as a two-step UI flow: search by drug name → pick a streng
 
 ---
 
-## 11. Planner conservative selection defaults and miss-query catch
+## 7. Planner selection defaults, domain anchors, and multi-domain trigger
 
-**Decision:** Replace the vague `"Select 1-3 systems"` rule in `_PLANNER_SYSTEM` with (a) a conservative default of 1 system, (b) per-domain anchors for common single-system query types, and (c) an explicit instruction to return empty selection for clearly non-clinical queries.
+**Decision:** Replaced the vague `"Select 1-3 systems"` rule with a conservative default, per-domain anchors for all 6 systems, an explicit miss-query catch, and a softened multi-domain trigger with concrete examples.
 
-**Background:** Eval run `20260502_175037` showed system precision ≈ 0.33 on simple condition queries — the planner consistently selected 3 systems for queries like `"diabetes"`, `"hypertension"`, and `"CPAP machine"` where only one was expected. Separately, the query `"asdfghjkl"` (keyboard mash) caused the planner to select a coding system and consume two full refinement iterations. Prose non-clinical queries (`"weather forecast"`, `"how do I make pasta"`) already worked correctly.
+**Background:** Two failures drove this:
+1. System precision ≈ 0.33 on simple queries — the planner consistently selected 3 systems for `"diabetes"`, `"hypertension"`, and `"CPAP machine"` where only 1 was expected.
+2. Keyboard mash (`"asdfghjkl"`) caused the planner to select a coding system and consume 2 full refinement iterations instead of returning empty.
 
 **The changes:**
 
-| Before | After |
-|---|---|
-| `"Select 1-3 systems. Select more only when the query genuinely spans multiple clinical domains."` | `"Default to 1 system. Add a second only when the query explicitly spans two distinct clinical domains; add a third only for genuinely complex multi-domain queries."` |
-| *(no domain anchors)* | Bare disease/symptom → ICD-10CM; drug → RxNorm; lab test → LOINC; device → HCPCS; unit → UCUM |
-| *(no miss-query instruction)* | `"If the query is clearly not a clinical term — random characters, keyboard mash, or non-medical questions — return an empty system selection."` |
+| Rule | Before | After |
+|---|---|---|
+| System count | `"Select 1-3 systems. Select more only when the query genuinely spans multiple clinical domains."` | `"Default to 1 system. Add a second when the query spans two distinct clinical domains (e.g. 'diabetes medication' → ICD-10CM + RxNorm); add a third only when three distinct domains are clearly involved."` |
+| Domain anchors | None | Bare disease → ICD-10CM; phenotypic trait → HPO; drug → RxNorm; lab test → LOINC; device → HCPCS; unit → UCUM |
+| Non-clinical queries | No instruction | Return empty system selection and state this in the rationale |
 
-**Why not change the evaluator or graph:**
-- The graph handles `selected_systems = []` correctly today (proven by q030/q031 in the eval — both return 1.0 system F1 with 0 API calls).
-- Modifying the evaluator for the empty-selection case adds constraints that could have side effects on normal query paths.
-- The planner prompt is the correct intervention point: it's where selection decisions are made.
+**Why HPO is included as a domain anchor:** The original ICD-10CM anchor included the word "symptom," causing phenotypic terms like `"ataxia"` to route to ICD-10CM instead of HPO. Scoping ICD-10CM strictly to disease names and adding an explicit HPO anchor for phenotypic traits and rare-disease characteristics resolved the routing.
 
-**Why no HPO domain anchor:**
-The HPO vs. ICD-10CM distinction (e.g., `"ataxia"` as a rare-disease phenotype vs. a billable ICD-10 condition) is too subtle for a fixed rule. A blanket HPO anchor would risk under-selection for ambiguous phenotype queries. HPO selection is left to LLM judgment.
+**Why the multi-domain trigger was softened:** An earlier version used `"explicitly spans"` as the gating phrase, which caused real-world over-conservatism — the planner treated most queries as single-domain even when they weren't. Removing `"explicitly"` and adding concrete examples (e.g., `"diabetes medication"` → ICD-10CM + RxNorm) gave the LLM a pattern to match rather than a vague threshold to interpret.
 
-**Trade-off:** Domain anchors reduce flexibility — `"diabetes"` will always route to ICD-10CM only, even in a context where RxNorm diabetes drugs are more relevant. This is acceptable: the system is designed for natural-language queries, and bare disease names almost universally map to diagnostic codes. Multi-domain queries like `"diabetes medication"` still route freely because they contain explicit signals from two domains.
+**Trade-off:** Domain anchors reduce routing flexibility for bare single-domain queries — `"diabetes"` always routes to ICD-10CM only. This is acceptable: bare disease names almost universally map to diagnostic codes. Multi-domain queries like `"diabetes medication"` still route to multiple systems because they contain signals from two domains.
 
 ---
 
-## 12. Scaling beyond 6 systems
+## 8. Scaling beyond 6 systems
 
-The current implementation embeds system descriptions directly in the planner prompt — appropriate for 6 fixed systems. Beyond ~15–20 systems this would become untenable: context cost grows linearly per query, the planner's attention across many options degrades, and onboarding a new system requires editing a central prompt.
+The current implementation embeds system descriptions directly in the planner prompt. This is appropriate for a fixed catalog of 6, but breaks down at scale.
 
-The natural evolution is embedding-based pre-routing: each system ships with a self-contained manifest (description, when-to-use, examples), embedded once at startup. The planner LLM sees only the top-k candidates relevant to a given query, with the full catalog available but not always loaded. Adding a system becomes a file drop, not a prompt edit.
+**~15–20 systems — embedding-based pre-routing:**
+- Each system ships with a self-contained manifest (description, when-to-use, examples), embedded once at startup.
+- The planner sees only the top-k candidates relevant to the query; the full catalog is available but not always in context.
+- Adding a new system becomes a file drop, not a prompt edit.
 
-Past ~30–50 systems the routing itself is worth replacing with a learned classifier trained on production query-system pairs, which removes the LLM from the routing path entirely and reserves it for query-term generation within already-selected systems. Hierarchical routing (category → system) becomes worth considering at the scale of UMLS-style integration with hundreds of vocabularies.
+**~30–50 systems — learned classifier:**
+- Replace the LLM router with a classifier trained on production query-system pairs.
+- Removes the LLM from the routing path entirely; it is reserved for query-term generation within already-selected systems.
+- More consistent and cheaper at scale than prompting.
 
-None of this is built in the prototype because the constraints lock the system count at 6. But the codebase is structured to support the migration: tools already live in per-system modules, and the planner's catalog block is the single place that would be replaced by a registry lookup.
+**Beyond ~50 systems — hierarchical routing:**
+- Category-level routing (e.g., clinical → diagnostic, administrative, pharmaceutical) before system-level routing.
+- Worth considering at UMLS-style integration scale with hundreds of vocabularies.
+
+**Codebase readiness:** Tools already live in per-system modules, and the planner's catalog block is the single place that would be replaced by a registry lookup. None of this is built in the prototype — the system count is fixed at 6.
