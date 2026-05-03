@@ -20,7 +20,7 @@ Available systems:
 {_CATALOG_LINES}
 
 Selection rules:
-- Default to 1 system. Add a second only when the query explicitly spans two distinct clinical domains; add a third only for genuinely complex multi-domain queries.
+- Default to 1 system. Add a second when the query spans two distinct clinical domains (e.g. "diabetes medication" → ICD-10CM + RxNorm; "glucose in mmol/L" → LOINC + UCUM; "metformin dosage units" → RxNorm + UCUM). Add a third only when the query clearly involves three distinct domains.
 - Domain anchors for unqualified single-domain queries:
   - Bare disease name or condition (e.g. "diabetes", "hypertension", "pneumonia") → ICD-10CM only
   - Phenotypic trait, observable clinical feature, or rare-disease characteristic (e.g. "ataxia", "brachydactyly", "photophobia") → HPO only
