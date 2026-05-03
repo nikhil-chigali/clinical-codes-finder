@@ -70,7 +70,7 @@ Full trade-off analysis in [`docs/design-decisions.md`](docs/design-decisions.md
 | `evaluation/reporter.py` — results table + markdown summary | ✅ Done |
 | `scripts/run_query.py` — CLI query runner (Rich + Typer) | ✅ Done |
 | `app/streamlit_app.py` — Streamlit UI | ✅ Done |
-| `scripts/run_eval.py` — evaluation runner CLI | 🔲 Pending |
+| `scripts/run_eval.py` — evaluation runner CLI | ✅ Done |
 
 ## Setup
 
@@ -95,7 +95,7 @@ uv run python -m scripts.run_query "metformin 500 mg" --verbose
 uv run streamlit run src/clinical_codes/app/streamlit_app.py
 ```
 
-**Run the eval** *(pending `scripts/run_eval.py`)*:
+**Run the eval:**
 ```bash
 uv run python -m scripts.run_eval --gold data/gold/gold_v0.1.1.json
 ```
@@ -104,25 +104,29 @@ uv run python -m scripts.run_eval --gold data/gold/gold_v0.1.1.json
 
 ## Evaluation
 
-The system is evaluated against a hand-curated gold set (`data/gold/gold_v0.1.1.json`) of N queries spanning four difficulty types: **simple** (one system, unambiguous), **multi-system** (legitimately spans 2+ systems), **ambiguous** (planner judgment call), and **miss** (out-of-scope / gibberish — agent should return empty).
+The system is evaluated against a hand-curated gold set (`data/gold/gold_v0.1.1.json`) of 31 queries spanning five difficulty types: **simple** (one system, unambiguous), **multi-system** (legitimately spans 2+ systems), **ambiguous** (planner judgment call), **refinement** (designed to fail on first pass), and **miss** (out-of-scope / gibberish — agent should return empty).
+
+Results from eval run `20260502_175037` (gold v0.1.1, 0 errors):
 
 | Metric | Value | What it measures |
 |---|---|---|
-| System-selection F1 | TBD | Did the planner pick the right systems? |
-| Top-3 code recall | TBD | Did expected codes appear in the top 3? |
-| Mean iterations / query | TBD | How often does refinement actually fire? |
-| Mean API calls / query | TBD | Cost proxy. Lower with better planning. |
+| System-selection F1 | 0.69 | Did the planner pick the right systems? |
+| Top-3 code recall | 0.43 | Did expected codes appear in the top 3? |
+| Must-include hit rate | 0.75 | Did canonically required codes appear? |
+| Mean iterations / query | 1.42 | How often does refinement actually fire? |
+| Mean API calls / query | 3.03 | Cost proxy. Lower with better planning. |
 
 Sliced by query type:
 
 | Query type | N | System-selection F1 | Top-3 recall |
 |---|---|---|---|
-| simple | TBD | TBD | TBD |
-| multi_system | TBD | TBD | TBD |
-| ambiguous | TBD | TBD | TBD |
-| miss | TBD | TBD | n/a |
+| simple | 11 | 0.67 | 0.64 |
+| multi_system | 8 | 0.70 | 0.08 |
+| ambiguous | 8 | 0.73 | 0.56 |
+| refinement | 1 | 0.67 | 0.00 |
+| miss | 3 | 0.67 | n/a |
 
-Failure analysis in `docs/eval-results.md` *(populated after evaluation runs)*.
+Key finding: multi-system top-3 recall (0.08) is the weakest area — the planner routes to correct systems but the expected codes rarely surface in top-3. The dominant failure mode for simple queries is over-selection (precision ~0.33, recall 1.0 — planner picks 3 systems when 1 is needed). Full results in `results/`.
 
 ---
 
@@ -196,7 +200,8 @@ clinical-codes-finder/
 │
 ├── data/
 │   └── gold/
-│       ├── gold_v0.1.0.json           # versioned — don't overwrite, bump
+│       ├── gold_v0.1.0.json           # original, knowledge-derived codes (not API-verified)
+│       ├── gold_v0.1.1.json           # current — API-verified 2026-04-29 (31 queries)
 │       └── README.md                  # curation notes, query-type distribution
 │
 ├── results/                           # eval run outputs (committed if small, else gitignored)
