@@ -88,7 +88,7 @@ Sliced by query type: `simple`, `multi_system`, `ambiguous`, `miss`.
 
 ## To-do (pre-share checklist)
 
-- [ ] **Planner prompt fixes (Fix B + Fix D)** — spec approved at `docs/superpowers/specs/2026-05-02-planner-prompt-fixes-design.md`. Next step: invoke `writing-plans` to generate the implementation plan, then implement. Target: system_f1 improves for `q001`–`q003`, `q009`; `q029` stops selecting systems.
+- [x] **Planner prompt fixes (Fix B + Fix D)** — implemented. System-selection F1: 0.69 → 0.85. Target queries (q001–q003, q009, q029) all hit system_f1 = 1.0.
 - [ ] **Review `docs/design-decisions.md`** — 12 sections now. Decide before sharing externally which to keep vs. cut (§6 Refinement context and §7 Summarizer are candidates to condense or drop; §8 Metrics types is an implementation detail that may not interest external readers).
 - [ ] **README final check** — confirm eval table reflects the post-Fix-B+D run, all setup instructions work on a clean clone, and demo links are filled in once deployed.
 - [ ] **Deploy Streamlit app** — push repo is already at `nikhil-chigali/clinical-codes-finder`. Steps: connect to [share.streamlit.io](https://share.streamlit.io), set main file to `src/clinical_codes/app/streamlit_app.py`, add `ANTHROPIC_API_KEY` under App Settings → Secrets (Streamlit Cloud injects it as an env var — no code changes needed). Verify with a test query after deploy.
