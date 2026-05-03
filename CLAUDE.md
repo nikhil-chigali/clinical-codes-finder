@@ -30,7 +30,7 @@ LangGraph state machine with 5 nodes in `src/clinical_codes/graph/`:
 1. **`planner`** (LLM) — in one call, selects 1–3 relevant coding systems **and** generates one search term per selected system. On refinement, re-entered with the prior attempt's results as context, so it can revise both system selection and search terms jointly.
 2. **`executor`** (async fan-out) — calls only the selected Clinical Tables APIs concurrently; per-system failures are isolated.
 3. **`evaluator`** (LLM) — decides *sufficient* (forward) or *refine* (loop back to planner). **Capped at 2 iterations** — enforced in graph state, not in the prompt.
-4. **`consolidator`** (deterministic) — dedup, group by system, rank by API confidence score.
+4. **`consolidator`** (deterministic) — dedup, group by system, rank by API result order.
 5. **`summarizer`** (LLM) — plain-English explanation with reasoning trace.
 
 Graph is assembled in `graph/builder.py`. State shape lives in `graph/state.py`. All prompt templates are centralized in `graph/prompts.py`.
@@ -39,7 +39,7 @@ Graph is assembled in `graph/builder.py`. State shape lives in `graph/state.py`.
 
 - **Merged planner (not separate router + planner).** A separate router could only revise search terms on refinement — never reconsider system selection. The merged planner can correct both decisions jointly when looping back.
 - **Plan-and-Execute with parallel fan-out, not ReAct.** The 6 systems are independent — ReAct would serialize them unnecessarily.
-- **Refinement only fires on weak results** (empty results for a planner-selected system, or all results below confidence floor). Not on every query.
+- **Refinement only fires on weak results** (empty results for a planner-selected system, or results the evaluator judges semantically irrelevant). Not on every query.
 - **Gold set is versioned** (`data/gold/gold_v0.1.1.json`). Never overwrite — bump the version when adding queries.
 - Tools in `src/clinical_codes/tools/` wrap the Clinical Tables API and normalize to a common shape `{code, display, score, raw}`. Base client with retry/timeout lives in `tools/base.py`.
 

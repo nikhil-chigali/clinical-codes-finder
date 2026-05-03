@@ -30,7 +30,7 @@ The pipeline is a LangGraph state machine. At its core is a tight **Planner → 
 1. **`planner`** — LLM. In a single call, picks which of the 6 coding systems are relevant **and** generates per-system search terms. On refinement, it's re-entered with the prior attempt's results as context, so it can revise both decisions jointly.
 2. **`executor`** — Async fan-out. Calls only the selected Clinical Tables APIs concurrently. Per-system failures are isolated.
 3. **`evaluator`** — LLM. Inspects results and decides: *sufficient* → forward to consolidation; *weak* → loop back to planner with feedback. Capped at 2 iterations.
-4. **`consolidator`** — Deterministic. Dedups, groups by system, ranks by API confidence.
+4. **`consolidator`** — Deterministic. Dedups, groups by system, ranks by API result order.
 5. **`summarizer`** — LLM. Plain-English explanation with reasoning trace.
 
 ### Why this architecture, and not ReAct?
@@ -179,7 +179,7 @@ clinical-codes-finder/
 - **Single-turn.** No conversational follow-ups (e.g. "now narrow to type 2"). State is reset per query.
 - **Refinement capped at 2 iterations.** Long-tail ambiguous queries may not converge; this is by design — unbounded loops are worse than honest failure.
 - **No caching.** Every query hits Clinical Tables fresh. A simple TTL cache would meaningfully cut API calls in production.
-- **Confidence relies on Clinical Tables' built-in scoring.** No learned re-ranker; results are only as good as the API's scoring.
+- **Ranking relies on Clinical Tables' built-in result order.** No learned re-ranker; result ordering is only as good as the API's own scoring.
 
 ---
 

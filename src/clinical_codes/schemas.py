@@ -17,5 +17,5 @@ class CodeResult(BaseModel):
     system: SystemName
     code: str
     display: str
-    score: float  # rank-derived confidence on [0.0, 1.0]; 1.0 = top result
+    score: float  # API rank score on [0.0, 1.0]; 1.0 = top result, not a semantic similarity score
     raw: dict[str, Any]

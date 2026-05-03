@@ -30,14 +30,14 @@ Captures the key architectural decisions made during design sessions, with ratio
 
 ---
 
-## 3. Confidence score — rank-derived, not semantic similarity
+## 3. API rank score — position in result list, not semantic similarity
 
 **Decision:** The `score` field on `CodeResult` is derived from the NLM API's own result ordering: `score = (total - rank) / total`, mapping position in the result list to [0, 1]. Rank 0 (top result) always gets 1.0; rank n-1 gets 1/n.
 
-**Why this matters:** The score is **not** a semantic similarity score. If a system returns any results, its top result always gets 1.0 regardless of how well it matches the query. This means threshold-based quality checks ("all results below 0.5") are near-meaningless for non-empty result sets.
+**Why this matters:** The score is **not** a semantic similarity score — it is purely a position score. If a system returns any results, its top result always gets 1.0 regardless of how well it matches the query. This means threshold-based quality checks ("all results below 0.5") are near-meaningless for non-empty result sets.
 
 **What the score is used for:**
-- **Consolidator** — ranks results within each system to select the top `display_results` (5) for the final response. The API's ordering is a reasonable proxy for term relevance.
+- **Consolidator** — orders results within each system to select the top `display_results` (5) for the final response. The API's ordering is a reasonable proxy for term relevance.
 - **Not used by the evaluator** — the evaluator performs semantic relevance judgment instead (see §4).
 
 **`confidence_threshold` in `config.py`:** Currently vestigial. It was designed for a threshold-based evaluator check that was superseded by semantic evaluation. Retained in config for potential future use (e.g., a consolidator filter).
