@@ -128,7 +128,57 @@ Systems that returned strong results do not need to be re-queried.
 
 ---
 
-## 9. Scaling beyond 6 systems
+## 10. RxNorm two-step dose-string fallback
+
+**Decision:** Override `RxNormClient.search()` to detect dose strings in the query, strip the dose to extract the drug name, retry the API with just the drug name, and expand the response into per-strength `CodeResult`s ranked so the matching dose appears first.
+
+**Background:** The RxTerms v3 API does a prefix match on `DISPLAY_NAME`. Drug display names look like `"lisinopril (Oral Pill)"` — they never start with a dose string. Queries like `"lisinopril 20 mg"` or `"metformin 500 mg"` return zero results from the primary search. This is the root cause of the top-3 recall failure on dose-qualified drug queries.
+
+The API is designed as a two-step UI flow: search by drug name → pick a strength from a dropdown. The strength data (`RXCUIS`, `STRENGTHS_AND_FORMS`) is already present in the first response as comma-separated values per row — it just isn't used by the original `_parse_response`.
+
+**Why override `search()` rather than modifying `_parse_response`:**
+- `_parse_response` is called after a successful fetch; the zero-result problem occurs before parsing — there is nothing to parse.
+- Overriding `search()` allows a second conditional API call, which is beyond `_parse_response`'s single-fetch contract.
+- The base class retry/error-isolation infrastructure (`_fetch_with_retry`) is reused directly — no new HTTP logic.
+
+**Why per-strength expansion (`_parse_strengths`):**
+- The API returns rows where each row represents one drug+form group with comma-separated CUIs and strengths (parallel arrays).
+- The expected code for `"lisinopril 20 mg"` is a specific-strength CUI, not the generic group CUI returned by `_parse_response`.
+- Expanding per-strength gives the evaluator and consolidator the right granularity to surface the exact dose match. Dose-matching entries are ranked first via a `matching` / `others` bucket sort keyed on `dose_norm in strength.lower()`.
+
+**Display format:** `"lisinopril (Oral Pill) — 20 MG Tablet"` — drug group name plus specific strength, separated by an em dash. This is fully qualified and human-readable in the Streamlit UI and summarizer output.
+
+**Trade-off:** A dose-string query now potentially makes two API calls (primary → empty, fallback). Acceptable — the fallback fires only when the primary returns empty AND a dose pattern is detected. Plain drug-name queries (`"lisinopril"`) take the unchanged one-call path.
+
+---
+
+## 11. Planner conservative selection defaults and miss-query catch
+
+**Decision:** Replace the vague `"Select 1-3 systems"` rule in `_PLANNER_SYSTEM` with (a) a conservative default of 1 system, (b) per-domain anchors for common single-system query types, and (c) an explicit instruction to return empty selection for clearly non-clinical queries.
+
+**Background:** Eval run `20260502_175037` showed system precision ≈ 0.33 on simple condition queries — the planner consistently selected 3 systems for queries like `"diabetes"`, `"hypertension"`, and `"CPAP machine"` where only one was expected. Separately, the query `"asdfghjkl"` (keyboard mash) caused the planner to select a coding system and consume two full refinement iterations. Prose non-clinical queries (`"weather forecast"`, `"how do I make pasta"`) already worked correctly.
+
+**The changes:**
+
+| Before | After |
+|---|---|
+| `"Select 1-3 systems. Select more only when the query genuinely spans multiple clinical domains."` | `"Default to 1 system. Add a second only when the query explicitly spans two distinct clinical domains; add a third only for genuinely complex multi-domain queries."` |
+| *(no domain anchors)* | Bare disease/symptom → ICD-10CM; drug → RxNorm; lab test → LOINC; device → HCPCS; unit → UCUM |
+| *(no miss-query instruction)* | `"If the query is clearly not a clinical term — random characters, keyboard mash, or non-medical questions — return an empty system selection."` |
+
+**Why not change the evaluator or graph:**
+- The graph handles `selected_systems = []` correctly today (proven by q030/q031 in the eval — both return 1.0 system F1 with 0 API calls).
+- Modifying the evaluator for the empty-selection case adds constraints that could have side effects on normal query paths.
+- The planner prompt is the correct intervention point: it's where selection decisions are made.
+
+**Why no HPO domain anchor:**
+The HPO vs. ICD-10CM distinction (e.g., `"ataxia"` as a rare-disease phenotype vs. a billable ICD-10 condition) is too subtle for a fixed rule. A blanket HPO anchor would risk under-selection for ambiguous phenotype queries. HPO selection is left to LLM judgment.
+
+**Trade-off:** Domain anchors reduce flexibility — `"diabetes"` will always route to ICD-10CM only, even in a context where RxNorm diabetes drugs are more relevant. This is acceptable: the system is designed for natural-language queries, and bare disease names almost universally map to diagnostic codes. Multi-domain queries like `"diabetes medication"` still route freely because they contain explicit signals from two domains.
+
+---
+
+## 12. Scaling beyond 6 systems
 
 The current implementation embeds system descriptions directly in the planner prompt — appropriate for 6 fixed systems. Beyond ~15–20 systems this would become untenable: context cost grows linearly per query, the planner's attention across many options degrades, and onboarding a new system requires editing a central prompt.
 

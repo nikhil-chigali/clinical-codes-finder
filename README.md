@@ -2,8 +2,8 @@
 
 An agentic system that takes a natural-language clinical term and returns relevant codes across six major medical coding systems — **ICD-10-CM**, **LOINC**, **RxNorm**, **HCPCS**, **UCUM**, and **HPO** — with a plain-English explanation of what was found and why.
 
-> 🎬 **Demo video:** [insert link]
-> 🚀 **Live demo:** [insert Streamlit Cloud link, optional]
+> 🎬 **Demo video:** coming soon
+> 🚀 **Live demo:** coming soon (Streamlit Cloud)
 
 ---
 
@@ -106,27 +106,29 @@ uv run python -m scripts.run_eval --gold data/gold/gold_v0.1.1.json
 
 The system is evaluated against a hand-curated gold set (`data/gold/gold_v0.1.1.json`) of 31 queries spanning five difficulty types: **simple** (one system, unambiguous), **multi-system** (legitimately spans 2+ systems), **ambiguous** (planner judgment call), **refinement** (designed to fail on first pass), and **miss** (out-of-scope / gibberish — agent should return empty).
 
-Results from eval run `20260502_175037` (gold v0.1.1, 0 errors):
+Results from eval run `20260502_210940` (gold v0.1.1, 0 errors):
 
 | Metric | Value | What it measures |
 |---|---|---|
 | System-selection F1 | 0.69 | Did the planner pick the right systems? |
-| Top-3 code recall | 0.43 | Did expected codes appear in the top 3? |
+| Top-3 code recall | 0.51 | Did expected codes appear in the top 3? |
 | Must-include hit rate | 0.75 | Did canonically required codes appear? |
-| Mean iterations / query | 1.42 | How often does refinement actually fire? |
-| Mean API calls / query | 3.03 | Cost proxy. Lower with better planning. |
+| Mean iterations / query | 1.39 | How often does refinement actually fire? |
+| Mean API calls / query | 3.10 | Cost proxy. Lower with better planning. |
 
 Sliced by query type:
 
 | Query type | N | System-selection F1 | Top-3 recall |
 |---|---|---|---|
-| simple | 11 | 0.67 | 0.64 |
+| simple | 11 | 0.67 | 0.73 |
 | multi_system | 8 | 0.70 | 0.08 |
-| ambiguous | 8 | 0.73 | 0.56 |
-| refinement | 1 | 0.67 | 0.00 |
+| ambiguous | 8 | 0.73 | 0.69 |
+| refinement | 1 | 0.50 | 0.00 |
 | miss | 3 | 0.67 | n/a |
 
-Key finding: multi-system top-3 recall (0.08) is the weakest area — the planner routes to correct systems but the expected codes rarely surface in top-3. The dominant failure mode for simple queries is over-selection (precision ~0.33, recall 1.0 — planner picks 3 systems when 1 is needed). Full results in `results/`.
+**What improved:** Top-3 recall jumped from 0.43 → 0.51 (+19%) after adding a dose-string fallback to the RxNorm client. Queries like `"lisinopril 20 mg"` and `"metformin 500 mg"` previously returned zero results because the RxTerms API prefix-matches on drug display names, not dose strings. The fallback detects a dose pattern, retries with just the drug name, and re-ranks results so the matching strength surfaces first.
+
+**Remaining gaps:** Multi-system top-3 recall (0.08) is the weakest area — the planner routes to the right systems but the specific expected codes rarely appear in top-3. Simple query over-selection (precision ~0.33) is the dominant system-routing failure; the planner picks 3 systems when 1 is needed for clear single-domain queries like `"diabetes"` or `"CPAP machine"`. Both are targeted by in-progress prompt improvements. Full results in `results/`.
 
 ---
 
@@ -244,7 +246,15 @@ clinical-codes-finder/
 
 ## What I'd do with more time
 
-- **Split the planner into a deterministic router + LLM planner** for the cost-efficiency case. Cheap rules/classifier handles 80% of unambiguous queries (e.g. "mg/dL" → UCUM); LLM only fires on the ambiguous tail. Requires a measurably-good router to be worth the complexity.
+**Completed improvements:**
+- **RxNorm dose-string fallback** — Queries like `"metformin 500 mg"` previously returned zero results because the RxTerms API prefix-matches on drug display names. The fix detects dose patterns, retries with just the drug name, and ranks results so the matching strength surfaces first. Top-3 recall improved from 0.43 → 0.51.
+
+**Planned:**
+- **Planner conservative defaults** — Replace `"select 1–3 systems"` with explicit domain anchors (bare disease → ICD-10CM, drug → RxNorm, lab test → LOINC, etc.) and a conservative default of 1 system. Expected to fix the precision ~0.33 failure on simple queries.
+- **Miss-query catch** — Add an instruction to return empty system selection for clearly non-clinical inputs (keyboard mash, non-medical questions).
+
+**Longer-term:**
+- **Split the planner into a deterministic router + LLM planner** for cost efficiency. Cheap rules or a small classifier handles 80% of unambiguous queries (e.g. "mg/dL" → UCUM); LLM only fires on the ambiguous tail.
 - **Replace the LLM evaluator with a deterministic policy** for clear-cut cases (zero results, single high-score match) and reserve the LLM call for genuinely ambiguous outcomes.
 - **LangSmith tracing** for production observability.
 - **Expand the gold set** to 100+ queries with inter-rater agreement on the ambiguous slice.
