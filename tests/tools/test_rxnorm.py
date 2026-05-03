@@ -43,3 +43,23 @@ async def test_display_contains_drug_name() -> None:
     assert results
     for r in results:
         assert "aspirin" in r.display.lower(), f"display should contain drug name: {r.display!r}"
+
+
+async def test_dose_string_returns_results() -> None:
+    async with RxNormClient() as client:
+        results = await client.search("lisinopril 20 mg", count=10)
+    assert len(results) > 0
+    assert "20" in results[0].display
+
+
+async def test_fallback_display_contains_strength() -> None:
+    async with RxNormClient() as client:
+        results = await client.search("metformin 500 mg", count=5)
+    assert results
+    assert all(" — " in r.display for r in results)
+
+
+async def test_no_dose_no_fallback() -> None:
+    async with RxNormClient() as client:
+        results = await client.search("zzznomatchzzz", count=5)
+    assert results == []
