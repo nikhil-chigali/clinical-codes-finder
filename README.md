@@ -195,6 +195,7 @@ clinical-codes-finder/
 - **Replace the LLM evaluator with a deterministic policy** for clear-cut cases (zero results, single high-score match) and reserve the LLM call for genuinely ambiguous outcomes.
 - **LangSmith tracing** for production observability.
 - **Expand the gold set** to 100+ queries with inter-rater agreement on the ambiguous slice.
+- **SME-guided prompt and gold set refinement** — the precision/conservatism balance in the planner prompt is ultimately a business decision: a billing team wants high precision (only route when confident), a research team wants high recall (cast wide). Collaborating with clinical SMEs to annotate edge cases and tune the domain anchors against a larger, domain-validated gold set would ground these trade-offs in real use-case requirements rather than heuristics.
 - **Cache layer** with TTL keyed on `(system, normalized_query)`.
 
 ---
