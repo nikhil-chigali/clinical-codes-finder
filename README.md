@@ -2,6 +2,12 @@
 
 An agentic system that takes a natural-language clinical term and returns relevant codes across six major medical coding systems — **ICD-10-CM**, **LOINC**, **RxNorm**, **HCPCS**, **UCUM**, and **HPO** — with a plain-English explanation of what was found and why.
 
+![Python](https://img.shields.io/badge/python-3.12%2B-blue?logo=python&logoColor=white)
+![LangGraph](https://img.shields.io/badge/LangGraph-0.2%2B-orange)
+![Streamlit](https://img.shields.io/badge/Streamlit-1.35%2B-red?logo=streamlit&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-105%20passing-brightgreen?logo=pytest&logoColor=white)
+![License](https://img.shields.io/badge/license-MIT-green)
+
 > 🎬 **Demo video:** coming soon
 > 🚀 **Live demo:** coming soon (Streamlit Cloud)
 
@@ -58,27 +64,13 @@ Full trade-off analysis in [`docs/design-decisions.md`](docs/design-decisions.md
 
 ---
 
-## Implementation status
-
-| Component | Status |
-|---|---|
-| `tools/` — 6 Clinical Tables API wrappers | ✅ Done |
-| `graph/state.py`, `graph/prompts.py`, `graph/nodes.py` | ✅ Done |
-| `graph/builder.py` — graph assembly | ✅ Done |
-| `evaluation/schema.py`, `runner.py` — gold set schema + runner | ✅ Done |
-| `evaluation/metrics.py` — system-selection F1, recall@3, must-include hit rate, aggregator | ✅ Done |
-| `evaluation/reporter.py` — results table + markdown summary | ✅ Done |
-| `scripts/run_query.py` — CLI query runner (Rich + Typer) | ✅ Done |
-| `app/streamlit_app.py` — Streamlit UI | ✅ Done |
-| `scripts/run_eval.py` — evaluation runner CLI | ✅ Done |
-
 ## Setup
 
 ```bash
 git clone <repo-url> && cd clinical-codes-finder
 uv sync                    # or: pip install -e .
 cp .env.example .env       # add ANTHROPIC_API_KEY
-uv run pytest              # confirm 102 tests pass
+uv run pytest              # confirm 105 tests pass
 ```
 
 ## Usage
@@ -135,101 +127,58 @@ Sliced by query type:
 ## Project structure
 
 ```
-src/clinical_codes/
-├── tools/            # Per-system Clinical Tables API wrappers
-├── graph/            # LangGraph nodes + builder + prompts
-├── evaluation/       # Gold set schema, runner, metrics
-└── app/              # Streamlit UI
-
-data/gold/            # Versioned gold eval sets
-docs/                 # Architecture, design decisions, eval results
-scripts/              # CLI entry points (run_query, run_eval)
-tests/                # Mirrors src/ layout
-```
-
-```DETAILED STRUCTURE
 clinical-codes-finder/
-├── README.md                          # problem, architecture, decisions, eval results
 ├── pyproject.toml                     # deps + project metadata (uv)
 ├── .env.example                       # ANTHROPIC_API_KEY
-├── .gitignore
 │
-├── docs/
-│   ├── design-decisions.md            # Plan-and-Execute vs ReAct, refinement triggers, etc.
-│   ├── scope.md                       # Phase 0 deliverable: what's in/out of scope
-│   ├── architecture.md                # diagram + node-by-node flow (pending)
-│   ├── eval-methodology.md            # how the gold set was curated, what metrics mean (pending)
-│   └── images/
-│       └── architecture.svg
+├── src/clinical_codes/
+│   ├── config.py                      # settings, env vars, model name, timeouts
+│   ├── schemas.py                     # shared types: SystemName, CodeResult
+│   │
+│   ├── tools/                         # per-system Clinical Tables API wrappers
+│   │   ├── base.py                    # http client, retry, timeout, normalize → {code,display,score,raw}
+│   │   ├── icd10cm.py
+│   │   ├── loinc.py
+│   │   ├── rxnorm.py                  # includes dose-string fallback
+│   │   ├── hcpcs.py
+│   │   ├── ucum.py
+│   │   └── hpo.py
+│   │
+│   ├── graph/                         # LangGraph state machine
+│   │   ├── state.py                   # GraphState TypedDict, PlannerOutput, EvaluatorOutput
+│   │   ├── prompts.py                 # all prompt templates in one place
+│   │   ├── nodes.py                   # planner, executor, evaluator, consolidator, summarizer
+│   │   └── builder.py                 # build_graph() — wires nodes + conditional edges
+│   │
+│   ├── evaluation/
+│   │   ├── schema.py                  # GoldQuery, GoldSet
+│   │   ├── runner.py                  # runs gold set through the graph
+│   │   ├── metrics.py                 # system-selection F1, recall@k, mean iters, mean API calls
+│   │   └── reporter.py                # results table + markdown summary
+│   │
+│   ├── cli/
+│   │   └── display.py                 # Rich display helpers (used by run_query)
+│   │
+│   └── app/
+│       └── streamlit_app.py
 │
-├── src/
-│   └── clinical_codes/
-│       ├── __init__.py
-│       ├── config.py                  # settings, env vars, constants (model name, timeouts)
-│       ├── schemas.py                 # shared types: SystemName, normalized result shape
-│       │
-│       ├── tools/                     # ← Phase 1
-│       │   ├── __init__.py
-│       │   ├── base.py                # http client, retry, timeout, normalize → {code,display,score,raw}
-│       │   ├── icd10cm.py
-│       │   ├── loinc.py
-│       │   ├── rxnorm.py
-│       │   ├── hcpcs.py
-│       │   ├── ucum.py
-│       │   └── hpo.py
-│       │
-│       ├── graph/                     # ← Phase 2 + 3
-│       │   ├── __init__.py
-│       │   ├── state.py               # GraphState TypedDict
-│       │   ├── prompts.py             # all prompt templates (versioned in one place)
-│       │   ├── nodes.py               # planner, executor, evaluator, consolidator, summarizer
-│       │   └── builder.py             # build_graph() — wires nodes + conditional edges
-│       │
-│       ├── evaluation/                # ← Phase 4
-│       │   ├── __init__.py
-│       │   ├── schema.py              # GoldQuery, GoldSet (the file you already have)
-│       │   ├── runner.py              # runs gold set through the graph, captures traces
-│       │   ├── metrics.py             # system-selection F1, recall@k, mean iters, mean API calls
-│       │   └── reporter.py            # writes results table + markdown summary
-│       │
-│       ├── cli/                       # Rich/Typer display helpers
-│       │   ├── __init__.py
-│       │   └── display.py             # render_results, render_error, update_status
-│       │
-│       └── app/                       # ← Phase 5
-│           ├── __init__.py
-│           └── streamlit_app.py
+├── data/gold/                         # versioned gold eval sets
+│   ├── gold_v0.1.1.json               # current — API-verified (31 queries)
+│   └── README.md                      # curation notes, query-type distribution
 │
-├── data/
-│   └── gold/
-│       ├── gold_v0.1.0.json           # original, knowledge-derived codes (not API-verified)
-│       ├── gold_v0.1.1.json           # current — API-verified 2026-04-29 (31 queries)
-│       └── README.md                  # curation notes, query-type distribution
-│
-├── results/                           # eval run outputs (committed if small, else gitignored)
-│   └── .gitkeep
-│
-├── scripts/                           # one-line CLI entry points
+├── results/                           # eval run outputs
+├── scripts/
 │   ├── run_query.py                   # python -m scripts.run_query "diabetes"
-│   ├── run_eval.py                    # python -m scripts.run_eval --gold v0.1.0
-│   └── seed_gold_set.py
+│   └── run_eval.py                    # python -m scripts.run_eval --gold data/gold/gold_v0.1.1.json
 │
 ├── tests/                             # mirrors src/ layout
-│   ├── conftest.py
 │   ├── tools/
-│   │   ├── test_icd10cm.py
-│   │   ├── test_loinc.py
-│   │   └── ...
 │   ├── graph/
-│   │   ├── test_planner.py            # offline tests with mocked LLM
-│   │   ├── test_consolidator.py       # pure function, no mocks needed
-│   │   └── test_graph_e2e.py          # full pipeline with mocked tools
 │   └── evaluation/
-│       ├── test_metrics.py
-│       └── test_reporter.py
 │
-└── notebooks/                         # exploration only, not a deliverable
-    └── 01_clinical_tables_api_probe.ipynb
+└── docs/
+    ├── design-decisions.md            # architecture trade-offs and key decisions
+    └── images/architecture.svg
 ```
 
 ---
