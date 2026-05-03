@@ -42,15 +42,23 @@ The instinct on agent assignments is to reach for ReAct (think → act → obser
 - **Per-system fan-out gives clean traces.** Each tool call is a separate observable unit, easier to debug and evaluate than a single agent juggling 6 tools through one prompt.
 - **The loop is bounded (max 2 iterations).** Unbounded refinement is where agents go to die. The cap is enforced in graph state, not prompted into the LLM.
 
-### Scaling beyond 6 systems
-The current implementation embeds system descriptions directly in the planner prompt — appropriate for 6 fixed systems. Beyond ~15-20 systems this would become untenable: context cost grows linearly per query, the planner's attention across many options degrades, and onboarding a new system requires editing a central prompt.
-
-The natural evolution is embedding-based pre-routing: each system ships with a self-contained manifest (description, when-to-use, examples), embedded once at startup. The planner LLM sees only the top-k candidates relevant to a given query, with the full catalog available but not always loaded. Adding a system becomes a file drop, not a prompt edit.
-Past ~30-50 systems the routing itself is worth replacing with a learned classifier trained on production query-system pairs, which removes the LLM from the routing path entirely and reserves it for query-term generation within already-selected systems. Hierarchical routing (category → system) becomes worth considering at the scale of UMLS-style integration with hundreds of vocabularies.
-
-None of this is built in the prototype because the constraints lock the system count at 6. But the codebase is structured to support the migration: tools already live in per-system modules, and the planner's catalog block is the single place that would be replaced by a registry lookup.
-
 Full trade-off analysis in [`docs/design-decisions.md`](docs/design-decisions.md).
+
+---
+
+## Key design decisions
+
+**1. Merged planner — system selection and search terms in one LLM call**
+
+An earlier design split these into a separate router and planner. The problem: with separate nodes, the refinement loop could only revise search terms — it could never reconsider which systems were selected. If the router picked LOINC for "blood sugar test" and got weak results, the planner could only retry with different LOINC terms; it could never escalate to ICD-10-CM. Merging the two decisions into one call means refinement can correct both — the most impactful change for ambiguous queries.
+
+**2. Evaluator diagnoses, planner decides**
+
+The evaluator tells the planner *what went wrong* ("LOINC returned imaging codes for a drug query"), but never prescribes *what to do next*. That separation keeps the evaluator lightweight — it only needs to recognize a mismatch, not reason about clinical vocabulary. The planner, which already has full domain context in its system prompt, handles remediation. This makes both nodes easier to test and reason about independently.
+
+**3. Domain anchors with a tunable precision/recall dial**
+
+The planner prompt encodes explicit per-domain routing rules (bare disease → ICD-10-CM, drug → RxNorm, phenotypic trait → HPO, etc.) with a default of 1 system. This default is a deliberate business-level choice: a billing team needs high precision (only route when confident); a research team needs high recall (cast wide). The anchors and the multi-domain trigger threshold are the single place to tune that trade-off — no graph or code changes required.
 
 ---
 
@@ -110,7 +118,7 @@ Sliced by query type:
 
 **What improved:** System-selection F1 jumped from 0.69 → 0.85 (+23%) after two planner prompt improvements. First, the planner was given a conservative default of 1 system and explicit domain anchors (bare disease → ICD-10-CM, drug → RxNorm, lab test → LOINC, etc.), which fixed over-selection on simple queries: `"diabetes"`, `"hypertension"`, `"asthma"`, and `"CPAP machine"` all went from system_f1 0.50 → 1.0. Second, an instruction was added to return an empty selection for clearly non-clinical inputs, which fixed gibberish queries like `"asdfghjkl"` (system_f1 0.00 → 1.0). Mean API calls dropped from 3.10 → 1.23. (A prior iteration also added an RxNorm dose-string fallback — enabling queries like `"lisinopril 20 mg"` to match on drug+strength rather than returning zero results — which improved top-3 recall from 0.43 → 0.51. The current run's top-3 recall of 0.42 reflects the cost of conservative system selection, not a loss of the fallback.)
 
-**Remaining gaps:** Top-3 recall (0.42) and must-include hit rate (0.50) regressed from the prior run (0.51 and 0.75 respectively) due to the conservative system selection — the planner now defaults to fewer systems, which helps precision but hurts recall on multi-system queries. The planner correctly selects systems for simple queries, but the specific expected codes rarely surface in the top 3, most pronounced in multi-system queries (top-3 recall 0.21). Multi-system cases where gold expects 3+ systems (q017 `"hypertension management"`, q018 `"diabetes management"`) remain under-recalled. q011 (`"ataxia"`) is a routing miss (system_f1 0.0) — the planner does not select HPO for genetic ataxia. Full results in `results/`.
+**Remaining gaps:** Top-3 recall (0.42) and must-include hit rate (0.50) regressed from the prior run (0.51 and 0.75 respectively) due to the conservative system selection — the planner now defaults to fewer systems, which helps precision but hurts recall on multi-system queries. The planner correctly selects systems for simple queries, but the specific expected codes rarely surface in the top 3, most pronounced in multi-system queries (top-3 recall 0.21). Multi-system cases where gold expects 3+ systems (q017 `"hypertension management"`, q018 `"diabetes management"`) remain under-recalled. Full results in `results/`.
 
 ---
 
