@@ -50,16 +50,6 @@ Past ~30-50 systems the routing itself is worth replacing with a learned classif
 
 None of this is built in the prototype because the constraints lock the system count at 6. But the codebase is structured to support the migration: tools already live in per-system modules, and the planner's catalog block is the single place that would be replaced by a registry lookup.
 
-### Why a single planner node, instead of separate router + planner?
-
-An earlier iteration of this design split the planner into two nodes: a `router` that picked coding systems, and a `query_planner` that generated search terms for the selected systems. I collapsed them into one node for a specific reason:
-
-**With separate nodes, the refinement loop could only revise search terms — never reconsider the system selection.** If the router picked LOINC for "blood sugar test" and got weak results, the planner could only retry with different LOINC terms. It could never escalate to ICD-10, even when that was clearly the right move. The bug shows up exactly on the ambiguous queries where the agent is most likely to be wrong.
-
-The two decisions are also tightly coupled in practice: knowing the search term ("metformin 500 mg") largely determines the system (RxNorm), and vice versa. A single LLM call that emits `{selected_systems, search_terms}` together reasons about them jointly, which matches how a human would.
-
-The trade-off: I lose the ability to swap in a cheaper deterministic router later (keyword rules → small classifier → LLM). Worth the loss for this scope; noted in [What I'd do with more time](#what-id-do-with-more-time) for the long term.
-
 Full trade-off analysis in [`docs/design-decisions.md`](docs/design-decisions.md).
 
 ---
@@ -118,7 +108,7 @@ Sliced by query type:
 | refinement | 1 | 1.00 | 0.00 |
 | miss | 3 | 1.00 | n/a |
 
-**What improved:** System-selection F1 jumped from 0.69 → 0.85 (+23%) after the planner prompt fixes (Fix B + Fix D). The conservative default of 1 system and explicit domain anchors (bare disease → ICD-10-CM, drug → RxNorm, lab test → LOINC, etc.) fixed the over-selection failure on simple queries: `"diabetes"`, `"hypertension"`, `"asthma"`, and `"CPAP machine"` all went from system_f1 0.50 → 1.0. The miss-query catch instruction also fixed `"asdfghjkl"` (system_f1 0.00 → 1.0). Mean API calls dropped from 3.10 → 1.23. (Prior run: Top-3 recall improved from 0.43 → 0.51 after adding an RxNorm dose-string fallback, enabling queries like `"lisinopril 20 mg"` to find results. The current run's top-3 recall of 0.42 reflects the cost of conservative system selection — the fallback is still active.)
+**What improved:** System-selection F1 jumped from 0.69 → 0.85 (+23%) after two planner prompt improvements. First, the planner was given a conservative default of 1 system and explicit domain anchors (bare disease → ICD-10-CM, drug → RxNorm, lab test → LOINC, etc.), which fixed over-selection on simple queries: `"diabetes"`, `"hypertension"`, `"asthma"`, and `"CPAP machine"` all went from system_f1 0.50 → 1.0. Second, an instruction was added to return an empty selection for clearly non-clinical inputs, which fixed gibberish queries like `"asdfghjkl"` (system_f1 0.00 → 1.0). Mean API calls dropped from 3.10 → 1.23. (A prior iteration also added an RxNorm dose-string fallback — enabling queries like `"lisinopril 20 mg"` to match on drug+strength rather than returning zero results — which improved top-3 recall from 0.43 → 0.51. The current run's top-3 recall of 0.42 reflects the cost of conservative system selection, not a loss of the fallback.)
 
 **Remaining gaps:** Top-3 recall (0.42) and must-include hit rate (0.50) regressed from the prior run (0.51 and 0.75 respectively) due to the conservative system selection — the planner now defaults to fewer systems, which helps precision but hurts recall on multi-system queries. The planner correctly selects systems for simple queries, but the specific expected codes rarely surface in the top 3, most pronounced in multi-system queries (top-3 recall 0.21). Multi-system cases where gold expects 3+ systems (q017 `"hypertension management"`, q018 `"diabetes management"`) remain under-recalled. q011 (`"ataxia"`) is a routing miss (system_f1 0.0) — the planner does not select HPO for genetic ataxia. Full results in `results/`.
 
