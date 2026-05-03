@@ -9,7 +9,7 @@ An agentic system that takes a natural-language clinical term and returns releva
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 > 🎬 **Demo video:** coming soon
-> 🚀 **Live demo:** coming soon (Streamlit Cloud)
+> 🚀 **Live demo:** [clinical-codes-finder.streamlit.app](https://clinical-codes-finder-igkg6rozbv48bl4t9fktjm.streamlit.app/)
 
 ---
 
