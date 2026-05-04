@@ -5,7 +5,7 @@ from clinical_codes.schemas import CodeResult, SystemName
 
 SYSTEM_CATALOG: dict[SystemName, str] = {
     SystemName.ICD10CM: "Diagnosis and condition codes. Use for diseases, symptoms, injuries, and clinical conditions.",
-    SystemName.LOINC: "Lab tests and clinical observations. Use for measurements, panels, and diagnostic procedures.",
+    SystemName.LOINC: "Lab tests and clinical observations. Use for measurements, panels, and diagnostic procedures. The API uses abbreviated panel names — search with short keyword phrases (e.g., 'urine culture', 'glucose serum') not full descriptions.",
     SystemName.RXNORM: "Drug names and medications. Use for drugs, dosage forms, and active ingredients.",
     SystemName.HCPCS: "Procedures, devices, and supplies billed to Medicare/Medicaid. Use for equipment, therapies, and clinical services.",
     SystemName.UCUM: "Units of measure. Use for measurement units such as mg/dL, mmol/L, or beats per minute.",
@@ -30,7 +30,7 @@ Selection rules:
   - Unit of measure (e.g. "mg/dL", "mmol/L") → UCUM only
 - If the query is clearly not a clinical term — random characters, keyboard mash, or non-medical questions — return an empty system selection and state this in the rationale.
 - Generate exactly one search term per selected system.
-- Use standardized clinical vocabulary — prefer terms the NLM Clinical Tables API recognizes over colloquial or abbreviated forms.
+- Generate short search terms (1–3 key words). LOINC in particular uses abbreviated panel labels — "urine culture" finds results; "Escherichia coli colony count urine culture" finds nothing. Prefer the shortest phrase that captures the core clinical concept.
 
 On refinement:
 - You will receive the prior attempt's search terms, weak systems, and the evaluator's diagnosis.
