@@ -19,6 +19,15 @@ _PLANNER_SYSTEM = f"""You are a clinical coding specialist. Given a natural-lang
 Available systems:
 {_CATALOG_LINES}
 
+Query decomposition:
+Before selecting systems, break the query into its meaningful clinical components — individual tokens or phrases that each map to a distinct clinical concept. Examples:
+- "ecoli 10000" → organism name ("ecoli") + numeric quantity ("10000") → two components, two systems (LOINC + UCUM)
+- "glucose in mmol/L" → lab analyte ("glucose") + unit of measure ("mmol/L") → two components, two systems (LOINC + UCUM)
+- "metformin 500 mg" → single component (drug + dose is one RxNorm concept; "mg" here is part of the dosage, not a standalone unit query) → RxNorm only
+- "diabetes" → single component (bare disease name) → ICD-10CM only
+
+Apply the domain anchors below to each component. Select the union of systems needed to cover all components. A multi-token query does not automatically mean multiple systems — only add a system when a component maps to a distinct domain not covered by the first system.
+
 Selection rules:
 - Default to 1 system. Add a second when the query spans two distinct clinical domains (e.g. "diabetes medication" → ICD-10CM + RxNorm; "glucose in mmol/L" → LOINC + UCUM; "metformin dosage units" → RxNorm + UCUM). Add a third only when the query clearly involves three distinct domains.
 - Domain anchors for unqualified single-domain queries:
@@ -27,7 +36,7 @@ Selection rules:
   - Drug name or dosage form (e.g. "metformin", "lisinopril 20 mg") → RxNorm only
   - Lab test or clinical measurement (e.g. "glucose test", "hemoglobin a1c") → LOINC only
   - Device or durable medical equipment (e.g. "wheelchair", "CPAP machine") → HCPCS only
-  - Unit of measure (e.g. "mg/dL", "mmol/L") → UCUM only
+  - Unit of measure (e.g. "mg/dL", "mmol/L") → UCUM only (a unit embedded in a drug dosage string, such as "mg" in "metformin 500 mg", is not a standalone UCUM query)
 - If the query is clearly not a clinical term — random characters, keyboard mash, or non-medical questions — return an empty system selection and state this in the rationale.
 - Generate exactly one search term per selected system.
 - Generate short search terms (1–3 key words). LOINC in particular uses abbreviated panel labels — "urine culture" finds results; "Escherichia coli colony count urine culture" finds nothing. Prefer the shortest phrase that captures the core clinical concept.
@@ -47,6 +56,13 @@ Evaluation criteria:
 For each weak system, provide a plain-English diagnosis explaining why the results are weak.
 Do NOT prescribe remediation — do not suggest alternative search terms or systems.
 Describe what went wrong; the planner will decide how to address it.
+
+Coverage check (in addition to result quality):
+- Identify each meaningful component of the original query.
+- For each component, verify it is addressed by at least one selected system and reflected in the results.
+- If a component is not captured — for example, a numeric value in the query but no quantitative unit system selected, or a drug name present but no RxNorm results — flag it as a coverage gap.
+- Report uncovered components as: "The [component] in the query is not represented by the selected systems."
+- A coverage gap is always a "refine" decision, even when other systems returned strong results.
 
 If decision is "sufficient", weak_systems must be empty and feedback must be an empty string."""
 
