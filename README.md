@@ -33,6 +33,27 @@ The pipeline is a LangGraph state machine. At its core is a tight **Planner → 
 4. **`consolidator`** — Deterministic. Dedups, groups by system, ranks by API result order.
 5. **`summarizer`** — LLM. Plain-English explanation with reasoning trace.
 
+### Step-by-step
+
+**Planner** receives the raw query and first decomposes it into meaningful clinical components before selecting systems. `"ecoli 10000"` decomposes into an organism name (`"ecoli"` → LOINC) and a numeric quantity (`"10000"` → UCUM); `"diabetes"` is a single component (bare disease name → ICD-10-CM only). Each component is mapped to a domain anchor and the planner selects the union of systems needed to cover all of them. It then generates one search term per system — short, keyword-optimized phrases rather than full descriptions, since the Clinical Tables APIs work best with abbreviated terms. On refinement, the planner receives the prior search terms, the list of weak systems, and the evaluator's diagnosis; it can revise both system selection and search terms in the same call.
+
+**Executor** fans out concurrently to all selected APIs using `asyncio.gather`. Each system is called independently — a timeout or error on one does not block the others. Results are normalized to a common `{code, display, score, raw}` shape. The `score` field is a rank-position value: `(total - rank) / total`, mapping the API's result ordering to [0, 1]. The top API result always scores 1.0 regardless of how well it matches the query — this is **not** a semantic similarity score.
+
+**Evaluator** runs two checks before deciding whether to continue or refine. First, a *result quality check*: are the returned display names semantically relevant to the query? Second, a *coverage check*: is every meaningful component of the original query addressed by at least one selected system? A numeric quantity with no unit system selected, or a drug name with no RxNorm results, both trigger refinement even if the other systems returned strong results. When refinement fires, the evaluator provides a plain-English diagnosis — what's missing or mismatched — but does not prescribe what to do next. The planner, which has full domain context in its system prompt, decides the remediation. The loop is hard-capped at 2 iterations in graph state (not prompted).
+
+**Consolidator** is the only fully deterministic node. It deduplicates within each system by code, sorts by API rank score descending, and keeps the top 5 per system. Results stay **grouped by system** — there is intentionally no cross-system ranking or score normalization. The rank-position score is meaningful within a single system's response (it reflects that API's own relevance ordering) but not across systems: a score of 1.0 from LOINC and 1.0 from UCUM both mean "top result in that API's response" — they carry no comparable semantic weight. Normalizing them into a flat ranked list would be false precision. The evaluator is the semantic quality gate; the consolidator's job is to organize what made it through, preserving the per-system grouping that makes results interpretable to different clinical audiences.
+
+**Summarizer** takes the consolidated results and the planner's rationale and writes a plain-English explanation for a non-technical reader — patient, student, or general clinician. It explains what each selected system covers, what was found, and why that system was relevant to this query. Medical terms are defined inline.
+
+### Per-system nuances
+
+- **ICD-10-CM** — Diseases, injuries, and clinical conditions. Bare disease or condition names route here by default. Does not handle phenotypic traits (HPO) or drug names (RxNorm).
+- **LOINC** — Lab tests and clinical observations. The Clinical Tables API matches on abbreviated panel labels ("Bacteria Ur Cult", "Glucose Ser Qn") rather than full descriptions — the planner generates short 1–3 word terms for LOINC specifically. Verbose phrases like "Escherichia coli colony count" return nothing.
+- **RxNorm** — Drug names and dosage forms. The API prefix-matches on display names that include route ("metFORMIN (Oral Pill)"). Dose-qualified queries ("metformin 500 mg") use a two-step fallback: if the full term returns nothing, the client strips the dose, retries with just the drug name, and expands results per-strength so the matching dose surfaces first.
+- **HCPCS** — Procedures, devices, and durable medical equipment billed to Medicare/Medicaid. Device and equipment queries route here ("wheelchair", "CPAP machine").
+- **UCUM** — Units of measure. Handles standalone unit queries ("mg/dL", "CFU/mL") and the unit component of multi-part queries ("ecoli 10000" → LOINC + UCUM). A unit embedded in a drug dosage string is not treated as a UCUM query — "mg" in "metformin 500 mg" is part of the RxNorm drug concept, not a measurement unit query.
+- **HPO** — Human Phenotype Ontology. Phenotypic traits, observable clinical features, and rare-disease characteristics ("ataxia", "brachydactyly", "photophobia"). Distinct from ICD-10-CM: HPO describes what a patient looks like clinically; ICD-10-CM is for diagnostic billing codes.
+
 ### Why this architecture, and not ReAct?
 
 The instinct on agent assignments is to reach for ReAct (think → act → observe in a loop with one LLM). I deliberately chose **Plan-and-Execute with parallel fan-out and a bounded refinement loop** instead:
