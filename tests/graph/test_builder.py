@@ -24,6 +24,29 @@ def test_make_initial_state_defaults() -> None:
     assert state["summary"] == ""
 
 
+# ── route_after_planner ────────────────────────────────────────────────────────
+
+def test_route_after_planner_empty_selection_skips_to_consolidator() -> None:
+    from clinical_codes.graph.builder import route_after_planner
+    from clinical_codes.graph.state import PlannerOutput
+
+    state = _base_state(
+        planner_output=PlannerOutput(
+            selected_systems=[],
+            search_terms={},
+            rationale="Query is gibberish — no clinical term detected.",
+        )
+    )
+    assert route_after_planner(state) == NODE_CONSOLIDATOR
+
+
+def test_route_after_planner_with_systems_goes_to_executor() -> None:
+    from clinical_codes.graph.builder import route_after_planner
+
+    state = _base_state()  # has ICD10CM in selected_systems
+    assert route_after_planner(state) == "executor"
+
+
 # ── route_after_evaluator ──────────────────────────────────────────────────────
 
 def _base_state(**overrides) -> dict:

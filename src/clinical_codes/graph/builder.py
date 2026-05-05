@@ -11,6 +11,12 @@ from clinical_codes.graph.nodes import (
 from clinical_codes.graph.state import GraphState
 
 
+def route_after_planner(state: GraphState) -> str:
+    if not state["planner_output"].selected_systems:
+        return NODE_CONSOLIDATOR
+    return "executor"
+
+
 def route_after_evaluator(state: GraphState) -> str:
     # `iteration` is post-increment (planner writes iteration + 1 at the start of each pass).
     # At MAX_ITERATIONS the cap fires regardless of the evaluator's decision.
@@ -45,7 +51,11 @@ def build_graph():
 
     graph.set_entry_point(NODE_PLANNER)
 
-    graph.add_edge(NODE_PLANNER, "executor")
+    graph.add_conditional_edges(
+        NODE_PLANNER,
+        route_after_planner,
+        {"executor": "executor", NODE_CONSOLIDATOR: NODE_CONSOLIDATOR},
+    )
     graph.add_edge("executor", "evaluator")
     graph.add_conditional_edges(
         "evaluator",
