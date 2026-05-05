@@ -6,6 +6,7 @@ import streamlit as st
 
 from clinical_codes.graph.builder import build_graph, make_initial_state
 from clinical_codes.graph.prompts import SYSTEM_CATALOG, effective_search_terms
+from clinical_codes.schemas import SystemName
 
 st.set_page_config(page_title="Clinical Codes Finder", layout="wide")
 
@@ -50,22 +51,27 @@ if search and query.strip():
     # ── Results ───────────────────────────────────────────────────────────────
     st.divider()
     st.markdown("**Results**")
+    st.caption("Results ranked by relevance to your query across all systems.")
     if not consolidated:
         st.info("No results found.")
     else:
         rows = []
-        for system, results in consolidated.items():
-            term = search_terms.get(system, "")
-            for r in results:
-                row: dict = {
-                    "System": system.value,
-                    "Code": r.code,
-                    "Display": r.display,
-                    "Searched as": term,
-                }
-                if system.value == "RXNORM" and "row" in r.raw and len(r.raw["row"]) > 2:
-                    row["Strengths"] = r.raw["row"][2]
-                rows.append(row)
+        for i, r in enumerate(consolidated, 1):
+            term = search_terms.get(r.system, "")
+            row: dict = {
+                "Rank": i,
+                "System": r.system.value,
+                "Code": r.code,
+                "Display": r.display,
+                "Searched as": term,
+            }
+            strengths = (
+                r.raw["row"][2]
+                if r.system == SystemName.RXNORM and "row" in r.raw and len(r.raw["row"]) > 2
+                else ""
+            )
+            row["Strengths"] = strengths
+            rows.append(row)
         st.dataframe(rows, use_container_width=True, hide_index=True)
 
     # ── Summary ───────────────────────────────────────────────────────────────
