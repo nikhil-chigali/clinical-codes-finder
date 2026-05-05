@@ -66,16 +66,18 @@ Accept a single natural-language clinical query, infer which of six medical codi
 
 ## Evaluator rules
 
-The evaluator applies a **clinical intent** standard — not surface-level entity overlap. A result must match the *type* of test, drug, or condition the query is asking about, not merely mention the same organism or term.
+The evaluator applies a **clinical domain** standard — filter results that belong to a fundamentally different clinical category than what the query requires. Within-domain variation (different specimen type, test method, or sub-classification for the same organism/drug/condition) is **not** filtered; the API's own ranking handles relevance within a system.
 
 Refinement is triggered if **any** planner-selected system meets either condition:
 
 1. **Empty results** — the API returned 0 results for that system.
-2. **Intent mismatch** — the returned results do not match the clinical intent of the query (e.g., a urine culture query gets molecular blood assay codes; a drug query gets lab panel codes).
+2. **Domain mismatch** — the returned results are clearly from the wrong clinical category (e.g., a drug query against LOINC returns only lab measurement codes; a condition query returns procedure codes).
+
+Within-domain variation is kept: a query for "ecoli" against LOINC accepts FISH assays, blood culture assays, and urine culture assays equally — they are all E. coli lab tests. Sub-type distinctions are for the user, not the evaluator.
 
 **Coverage check:** if any meaningful component of the query is unrepresented by any selected system, that is always a refine decision — even if other systems returned strong results.
 
-**Semantic filter (`relevant_codes`):** on every pass (sufficient *and* refine), the evaluator lists per system which specific codes match the clinical intent. The consolidator applies this filter before dedup/trim. An empty list for a system removes all its results. This ensures that if the iteration cap fires and the pipeline is forced forward on a "refine" decision, the best available filtered set is used rather than all raw results.
+**Semantic filter (`relevant_codes`):** on every pass (sufficient *and* refine), the evaluator lists per system which specific codes belong to the correct clinical domain. The consolidator applies this filter before dedup/trim. An empty list for a system removes all its results. This ensures that if the iteration cap fires and the pipeline is forced forward on a "refine" decision, the best available filtered set is used rather than all raw results.
 
 **Cap-hit summarizer behavior:** when the iteration cap fires and the decision is still "refine", the summarizer receives an explicit note naming the evaluator's final feedback. It is instructed to surface this in the summary — stating that the search was incomplete, naming the specific gap, and suggesting the user rephrase or narrow the query.
 

@@ -138,22 +138,28 @@ The API is designed as a two-step UI flow: search by drug name → pick a streng
 
 ---
 
-## 8. Evaluator semantic filtering — clinical intent, not entity overlap
+## 8. Evaluator semantic filtering — clinical domain, not sub-type specificity
 
-**Decision:** The evaluator populates `relevant_codes: dict[SystemName, list[str]]` on every pass (sufficient and refine), listing only codes that match the *clinical intent* of the query. The consolidator applies this filter before dedup/trim.
+**Decision:** The evaluator populates `relevant_codes: dict[SystemName, list[str]]` on every pass (sufficient and refine), listing only codes that belong to the correct clinical domain for the query. The consolidator applies this filter before dedup/trim.
 
-**The clinical intent standard:** A result must match the *type* of test, drug, or condition the query is asking about — not merely mention the same entity. Examples:
-- Query `"ecoli 10000"` (urine culture colony count) → a LOINC FISH blood assay for E. coli does **not** match, even though it mentions E. coli.
-- Query `"metformin 500 mg"` → a LOINC plasma metformin level panel does **not** match; RxNorm drug formulation codes **do** match.
-- Query `"hypertension"` → ICD-10-CM I10 (primary hypertension) **matches**; I51.9 (unspecified heart disease, a complication) does **not**.
+**The clinical domain standard:** Filter results that are from a fundamentally different clinical category — not results that represent the same entity through a different method, specimen type, or sub-classification. The API's own ranking handles relevance within a domain; the evaluator's job is to catch cross-domain mismatches.
+
+Cross-domain mismatches (filter):
+- Query `"metformin 500 mg"` → a LOINC plasma metformin level panel does **not** match — it is a lab measurement, not a drug formulation. RxNorm drug formulation codes **do** match.
+- Query `"hypertension"` → ICD-10-CM I10 (primary hypertension) **matches**; I51.9 (unspecified heart disease, a different condition) does **not**.
+
+Within-domain variation (keep — trust the API):
+- Query `"ecoli"` against LOINC → FISH assays, blood culture assays, and urine culture assays **all match** — they are all E. coli lab tests. The evaluator does not choose between specimen types or test methods; that sub-type distinction is beyond its role.
+
+**Why the earlier "urine culture only" interpretation was wrong:** A prior version of the evaluator prompt used `"ecoli 10000"` as an example, treating only urine culture codes as relevant and discarding FISH assays. This was over-interpretation — the query is ambiguous about specimen type, and the API legitimately returns any E. coli lab test for the search term "ecoli". Filtering within a correctly matched domain assumes clinical specificity the system cannot reliably infer.
 
 **Why filter in the evaluator, not a separate node:** The evaluator already reads every result display name to make its sufficiency decision. Filtering is a natural extension of the same judgment — no additional LLM call, no new node. The evaluator's `relevant_codes` output costs a handful of extra tokens in the structured response.
 
-**Why populate on refine, not only on sufficient:** If the iteration cap fires and the pipeline is forced forward on a "refine" decision, `relevant_codes` is already populated with the best available filtered set. Without this, all raw results — including those the evaluator explicitly judged as intent-mismatches — would flow through unfiltered.
+**Why populate on refine, not only on sufficient:** If the iteration cap fires and the pipeline is forced forward on a "refine" decision, `relevant_codes` is already populated with the best available filtered set. Without this, all raw results — including those the evaluator judged as domain-mismatches — would flow through unfiltered.
 
 **Empty list vs absent key in `relevant_codes`:**
 - Key absent → system had no raw results; consolidator skips filter (nothing to filter).
-- Empty list `[]` → system had results but all were intent-mismatches; consolidator removes all results for that system.
+- Empty list `[]` → system had results but all were domain-mismatches; consolidator removes all results for that system.
 - Non-empty list → consolidator keeps only those codes, discards the rest.
 
 This distinction is enforced with `if keep is not None` in the consolidator (not `if keep`), so an empty list correctly removes all results rather than being treated as "no filter."
