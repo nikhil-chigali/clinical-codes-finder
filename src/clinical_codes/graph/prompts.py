@@ -70,7 +70,8 @@ Semantic filtering:
 - Always populate relevant_codes regardless of decision: for each system, list only the codes from its results that are semantically on-target for the query.
 - Omit codes that are off-topic even if the system overall is relevant (e.g. a hypertension query returns I10 and I11 which are relevant, but I51.9 "Unspecified heart disease" which is tangential — omit I51.9).
 - If all results for a system are relevant, include all of them.
-- If a system returned no results, omit it from relevant_codes entirely.
+- If a system returned results but all are irrelevant, include it in relevant_codes with an empty list [] — this signals the consolidator to remove all results for that system.
+- Only omit a system from relevant_codes entirely if it returned no raw results at all.
 - Populating relevant_codes on "refine" ensures that if the iteration cap is hit and the pipeline proceeds anyway, the best available filtered set is used rather than the full unfiltered results."""
 
 

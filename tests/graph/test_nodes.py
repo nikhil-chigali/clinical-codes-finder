@@ -182,7 +182,7 @@ def test_consolidator_filters_by_relevant_codes() -> None:
 def test_consolidator_no_filter_when_relevant_codes_empty() -> None:
     from clinical_codes.graph.nodes import consolidator
 
-    # empty relevant_codes (e.g. refine path) — all results pass through
+    # empty relevant_codes dict (key absent for this system) — all results pass through
     state = _make_state(
         evaluator_output=_make_evaluator_output(relevant_codes={}),
         raw_results={
@@ -196,6 +196,25 @@ def test_consolidator_no_filter_when_relevant_codes_empty() -> None:
     codes = [r.code for r in result["consolidated"][SystemName.ICD10CM]]
     assert "I10" in codes
     assert "I51" in codes
+
+
+def test_consolidator_empty_list_removes_all_results() -> None:
+    from clinical_codes.graph.nodes import consolidator
+
+    # relevant_codes has an empty list for ICD10CM — all results judged irrelevant
+    state = _make_state(
+        evaluator_output=_make_evaluator_output(
+            relevant_codes={SystemName.ICD10CM: []}
+        ),
+        raw_results={
+            SystemName.ICD10CM: [
+                _make_result(SystemName.ICD10CM, "I10", "Essential hypertension", score=1.0),
+                _make_result(SystemName.ICD10CM, "I51", "Unspecified heart disease", score=0.9),
+            ]
+        },
+    )
+    result = consolidator(state)
+    assert result["consolidated"][SystemName.ICD10CM] == []
 
 
 # ── Planner ───────────────────────────────────────────────────────────────────

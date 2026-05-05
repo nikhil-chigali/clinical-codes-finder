@@ -90,9 +90,10 @@ def consolidator(state: GraphState) -> dict:
     for system in selected:
         results = raw.get(system, [])
 
-        # Apply semantic filter if evaluator identified relevant codes for this system
-        keep = relevant.get(system)
-        if keep:
+        # Apply semantic filter if evaluator specified relevant codes for this system.
+        # keep=None means no filter (key absent); keep=[] means remove all (all irrelevant).
+        keep = relevant.get(system, None)
+        if keep is not None:
             keep_set = set(keep)
             results = [r for r in results if r.code in keep_set]
 
