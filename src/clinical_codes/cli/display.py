@@ -30,20 +30,23 @@ def render_results(
         console.print("[dim]No results[/dim]")
         return
 
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("System")
+    table.add_column("Code", style="cyan")
+    table.add_column("Display")
+    table.add_column("Searched as", style="dim")
+    if verbose:
+        table.add_column("Score", style="dim")
+
     for system, results in consolidated.items():
         term = search_terms.get(system, "")
-        console.print(f"\n[bold]{system.value}[/bold]  [dim]searched: \"{term}\"[/dim]")
-        table = Table(show_header=False, box=None, padding=(0, 2))
-        table.add_column("Code", style="cyan")
-        table.add_column("Display")
-        if verbose:
-            table.add_column("Score", style="dim")
         for r in results:
-            row = [r.code, r.display]
+            row = [system.value, r.code, r.display, term]
             if verbose:
                 row.append(f"{r.score:.2f}")
             table.add_row(*row)
-        console.print(table)
+
+    console.print(table)
 
 
 def render_error(console: Console, message: str, tb: str | None = None) -> None:

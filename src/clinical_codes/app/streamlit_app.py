@@ -53,17 +53,20 @@ if search and query.strip():
     if not consolidated:
         st.info("No results found.")
     else:
+        rows = []
         for system, results in consolidated.items():
             term = search_terms.get(system, "")
-            with st.expander(f"{system.value} · {len(results)} results", expanded=True):
-                st.caption(f'searched: "{term}"')
-                rows = []
-                for r in results:
-                    row: dict = {"Code": r.code, "Display": r.display}
-                    if system.value == "RXNORM" and "row" in r.raw and len(r.raw["row"]) > 2:
-                        row["Strengths"] = r.raw["row"][2]
-                    rows.append(row)
-                st.dataframe(rows, use_container_width=True, hide_index=True)
+            for r in results:
+                row: dict = {
+                    "System": system.value,
+                    "Code": r.code,
+                    "Display": r.display,
+                    "Searched as": term,
+                }
+                if system.value == "RXNORM" and "row" in r.raw and len(r.raw["row"]) > 2:
+                    row["Strengths"] = r.raw["row"][2]
+                rows.append(row)
+        st.dataframe(rows, use_container_width=True, hide_index=True)
 
     # ── Summary ───────────────────────────────────────────────────────────────
     st.divider()
