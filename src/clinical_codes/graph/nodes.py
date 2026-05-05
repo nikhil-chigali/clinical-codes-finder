@@ -83,12 +83,22 @@ async def evaluator(state: GraphState) -> dict:
 def consolidator(state: GraphState) -> dict:
     selected = state["planner_output"].selected_systems
     raw = state["raw_results"]
+    ev = state["evaluator_output"]
+    relevant = ev.relevant_codes if ev else {}
 
     consolidated: dict[SystemName, list[CodeResult]] = {}
     for system in selected:
+        results = raw.get(system, [])
+
+        # Apply semantic filter if evaluator identified relevant codes for this system
+        keep = relevant.get(system)
+        if keep:
+            keep_set = set(keep)
+            results = [r for r in results if r.code in keep_set]
+
         # Sort first so the highest-score entry for each code is seen first,
         # then dedup by keeping first occurrence. List stays sorted after dedup.
-        results = sorted(raw.get(system, []), key=lambda r: r.score, reverse=True)
+        results = sorted(results, key=lambda r: r.score, reverse=True)
         seen: set[str] = set()
         deduped: list[CodeResult] = []
         for r in results:

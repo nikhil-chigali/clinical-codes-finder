@@ -30,8 +30,14 @@ def _make_evaluator_output(
     decision: str = "sufficient",
     weak: list[SystemName] | None = None,
     feedback: str = "Good.",
+    relevant_codes: dict | None = None,
 ) -> EvaluatorOutput:
-    return EvaluatorOutput(decision=decision, weak_systems=weak or [], feedback=feedback)
+    return EvaluatorOutput(
+        decision=decision,
+        weak_systems=weak or [],
+        feedback=feedback,
+        relevant_codes=relevant_codes or {},
+    )
 
 
 def _make_state(**overrides) -> dict:
@@ -151,6 +157,45 @@ def test_consolidator_empty_results_system() -> None:
     result = consolidator(state)
     assert SystemName.ICD10CM in result["consolidated"]
     assert result["consolidated"][SystemName.ICD10CM] == []
+
+
+def test_consolidator_filters_by_relevant_codes() -> None:
+    from clinical_codes.graph.nodes import consolidator
+
+    state = _make_state(
+        evaluator_output=_make_evaluator_output(
+            relevant_codes={SystemName.ICD10CM: ["I10"]}
+        ),
+        raw_results={
+            SystemName.ICD10CM: [
+                _make_result(SystemName.ICD10CM, "I10", "Essential hypertension", score=1.0),
+                _make_result(SystemName.ICD10CM, "I51", "Unspecified heart disease", score=0.9),
+            ]
+        },
+    )
+    result = consolidator(state)
+    codes = [r.code for r in result["consolidated"][SystemName.ICD10CM]]
+    assert codes == ["I10"]
+    assert "I51" not in codes
+
+
+def test_consolidator_no_filter_when_relevant_codes_empty() -> None:
+    from clinical_codes.graph.nodes import consolidator
+
+    # empty relevant_codes (e.g. refine path) — all results pass through
+    state = _make_state(
+        evaluator_output=_make_evaluator_output(relevant_codes={}),
+        raw_results={
+            SystemName.ICD10CM: [
+                _make_result(SystemName.ICD10CM, "I10", "Essential hypertension", score=1.0),
+                _make_result(SystemName.ICD10CM, "I51", "Unspecified heart disease", score=0.9),
+            ]
+        },
+    )
+    result = consolidator(state)
+    codes = [r.code for r in result["consolidated"][SystemName.ICD10CM]]
+    assert "I10" in codes
+    assert "I51" in codes
 
 
 # ── Planner ───────────────────────────────────────────────────────────────────

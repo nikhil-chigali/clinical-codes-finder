@@ -94,6 +94,7 @@ def test_build_evaluator_messages() -> None:
     assert "clinical code quality evaluator" in messages[0].content
     human = messages[1].content
     assert "hypertension" in human
+    assert "[I10]" in human
     assert "Essential (primary) hypertension" in human
 
 

@@ -64,7 +64,13 @@ Coverage check (in addition to result quality):
 - Report uncovered components as: "The [component] in the query is not represented by the selected systems."
 - A coverage gap is always a "refine" decision, even when other systems returned strong results.
 
-If decision is "sufficient", weak_systems must be empty and feedback must be an empty string."""
+If decision is "sufficient", weak_systems must be empty and feedback must be an empty string.
+
+Semantic filtering:
+- When decision is "sufficient", populate relevant_codes: for each system, list only the codes from its results that are semantically on-target for the query.
+- Omit codes that are off-topic even if the system overall is relevant (e.g. a hypertension query returns I10 and I11 which are relevant, but I51.9 "Unspecified heart disease" which is tangential — omit I51.9).
+- If all results for a system are relevant, include all of them.
+- When decision is "refine", relevant_codes must be empty — filtering is irrelevant since the loop will retry."""
 
 
 def build_planner_messages(
@@ -106,7 +112,7 @@ def build_evaluator_messages(
         result_lines.append(f'  {system} (searched: "{term}"):')
         if results:
             for i, r in enumerate(results, 1):
-                result_lines.append(f"    {i}. {r.display}")
+                result_lines.append(f"    {i}. [{r.code}] {r.display}")
         else:
             result_lines.append("    (no results)")
 

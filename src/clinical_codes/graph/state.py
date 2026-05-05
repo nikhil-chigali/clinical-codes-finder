@@ -30,6 +30,8 @@ class EvaluatorOutput(BaseModel):
     decision: Literal["sufficient", "refine"]
     weak_systems: list[SystemName]
     feedback: str
+    relevant_codes: dict[SystemName, list[str]] = {}
+    # codes to keep per system; populated on "sufficient", empty on "refine"
 
 
 class Attempt(BaseModel):
