@@ -6,13 +6,20 @@ from clinical_codes.config import settings
 from clinical_codes.graph.prompts import (
     build_evaluator_messages,
     build_planner_messages,
+    build_re_ranker_messages,
     build_summarizer_messages,
 )
-from clinical_codes.graph.state import Attempt, EvaluatorOutput, GraphState, PlannerOutput
+from clinical_codes.graph.state import (
+    Attempt,
+    EvaluatorOutput,
+    GraphState,
+    PlannerOutput,
+    ReRankerOutput,
+)
 from clinical_codes.schemas import CodeResult, SystemName
 from clinical_codes.tools import CLIENTS
 
-# api_key passed explicitly to all three LLM clients so construction succeeds
+# api_key passed explicitly to all LLM clients so construction succeeds
 # when ANTHROPIC_API_KEY is absent at test time (all LLM calls are mocked).
 _planner_chain = (
     ChatAnthropic(
@@ -30,6 +37,15 @@ _evaluator_chain = (
         api_key=settings.anthropic_api_key or "placeholder-for-tests",
     )
     .with_structured_output(EvaluatorOutput)
+)
+
+_re_ranker_chain = (
+    ChatAnthropic(
+        model=settings.llm_model,
+        temperature=settings.re_ranker_temperature,
+        api_key=settings.anthropic_api_key or "placeholder-for-tests",
+    )
+    .with_structured_output(ReRankerOutput)
 )
 
 _summarizer_llm = ChatAnthropic(
@@ -80,35 +96,44 @@ async def evaluator(state: GraphState) -> dict:
     return {"evaluator_output": output, "attempt_history": [attempt]}
 
 
-def consolidator(state: GraphState) -> dict:
-    selected = state["planner_output"].selected_systems
-    raw = state["raw_results"]
+async def re_ranker(state: GraphState) -> dict:
     ev = state["evaluator_output"]
     relevant = ev.relevant_codes if ev else {}
+    raw = state["raw_results"]
+    selected = state["planner_output"].selected_systems if state["planner_output"] else []
 
-    consolidated: dict[SystemName, list[CodeResult]] = {}
+    # Build pool: apply domain filter per system, then flatten
+    pool: list[CodeResult] = []
     for system in selected:
         results = raw.get(system, [])
-
-        # Apply semantic filter if evaluator specified relevant codes for this system.
-        # keep=None means no filter (key absent); keep=[] means remove all (all irrelevant).
+        # keep=None → no filter; keep=[] → remove all; non-empty → keep only those codes
         keep = relevant.get(system, None)
         if keep is not None:
             keep_set = set(keep)
             results = [r for r in results if r.code in keep_set]
+        pool.extend(results)
 
-        # Sort first so the highest-score entry for each code is seen first,
-        # then dedup by keeping first occurrence. List stays sorted after dedup.
-        results = sorted(results, key=lambda r: r.score, reverse=True)
-        seen: set[str] = set()
-        deduped: list[CodeResult] = []
-        for r in results:
-            if r.code not in seen:
-                seen.add(r.code)
-                deduped.append(r)
-        consolidated[system] = deduped[:settings.display_results]
+    if not pool:
+        return {"consolidated": []}
+    if len(pool) <= settings.flat_results:  # flat_results is both the LLM-call threshold and the output cap
+        return {"consolidated": pool}
 
-    return {"consolidated": consolidated}
+    messages = build_re_ranker_messages(state["query"], pool, settings.flat_results)
+    output: ReRankerOutput = await _re_ranker_chain.ainvoke(messages)
+
+    pool_index: dict[tuple[SystemName, str], CodeResult] = {
+        (r.system, r.code): r for r in pool
+    }
+    ranked: list[CodeResult] = []
+    seen: set[tuple[SystemName, str]] = set()
+    for rc in output.ranked_codes:
+        key = (rc.system, rc.code)
+        if key in pool_index and key not in seen:
+            seen.add(key)
+            ranked.append(pool_index[key])
+
+    # Fall back to pool order if LLM output is entirely invalid (hallucinated codes)
+    return {"consolidated": ranked[:settings.flat_results] or pool[:settings.flat_results]}
 
 
 async def summarizer(state: GraphState) -> dict:

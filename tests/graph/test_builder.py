@@ -1,4 +1,4 @@
-from clinical_codes.config import MAX_ITERATIONS, NODE_CONSOLIDATOR, NODE_PLANNER
+from clinical_codes.config import MAX_ITERATIONS, NODE_RE_RANKER, NODE_PLANNER
 from clinical_codes.schemas import SystemName
 
 
@@ -20,13 +20,13 @@ def test_make_initial_state_defaults() -> None:
     assert state["raw_results"] == {}
     assert state["evaluator_output"] is None
     assert state["attempt_history"] == []
-    assert state["consolidated"] == {}
+    assert state["consolidated"] == []
     assert state["summary"] == ""
 
 
 # ── route_after_planner ────────────────────────────────────────────────────────
 
-def test_route_after_planner_empty_selection_skips_to_consolidator() -> None:
+def test_route_after_planner_empty_selection_skips_to_re_ranker() -> None:
     from clinical_codes.graph.builder import route_after_planner
     from clinical_codes.graph.state import PlannerOutput
 
@@ -37,7 +37,7 @@ def test_route_after_planner_empty_selection_skips_to_consolidator() -> None:
             rationale="Query is gibberish — no clinical term detected.",
         )
     )
-    assert route_after_planner(state) == NODE_CONSOLIDATOR
+    assert route_after_planner(state) == NODE_RE_RANKER
 
 
 def test_route_after_planner_with_systems_goes_to_executor() -> None:
@@ -66,7 +66,7 @@ def _base_state(**overrides) -> dict:
             feedback="Good.",
         ),
         "attempt_history": [],
-        "consolidated": {},
+        "consolidated": [],
         "summary": "",
     }
     state.update(overrides)
@@ -83,7 +83,7 @@ def test_route_sufficient_under_cap() -> None:
             decision="sufficient", weak_systems=[], feedback="Good."
         ),
     )
-    assert route_after_evaluator(state) == NODE_CONSOLIDATOR
+    assert route_after_evaluator(state) == NODE_RE_RANKER
 
 
 def test_route_refine_under_cap() -> None:
@@ -101,7 +101,7 @@ def test_route_refine_under_cap() -> None:
     assert route_after_evaluator(state) == NODE_PLANNER
 
 
-def test_route_cap_forces_consolidate() -> None:
+def test_route_cap_forces_re_ranker() -> None:
     from clinical_codes.graph.builder import route_after_evaluator
     from clinical_codes.graph.state import EvaluatorOutput
 
@@ -113,7 +113,7 @@ def test_route_cap_forces_consolidate() -> None:
             feedback="Still weak.",
         ),
     )
-    assert route_after_evaluator(state) == NODE_CONSOLIDATOR
+    assert route_after_evaluator(state) == NODE_RE_RANKER
 
 
 def test_route_one_below_cap_still_refines() -> None:

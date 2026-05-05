@@ -1,5 +1,6 @@
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 
+from clinical_codes.config import settings
 from clinical_codes.graph.state import Attempt, PlannerOutput
 from clinical_codes.schemas import CodeResult, SystemName
 
@@ -88,6 +89,19 @@ Semantic filtering:
 - Populating relevant_codes on "refine" ensures that if the iteration cap is hit and the pipeline proceeds anyway, the best available filtered set is used rather than the full unfiltered results."""
 
 
+_RE_RANKER_SYSTEM = """You are a clinical code relevance ranker. Given a user query and a pool of
+candidate codes from multiple medical coding systems, select and return the
+codes most relevant to the query.
+
+Ranking criteria:
+- Rank by how directly the code matches the specific clinical concept in the query.
+- Prefer specificity: "lisinopril 20 MG Oral Tablet" ranks above "lisinopril (Oral Pill)"
+  for the query "lisinopril 20 mg".
+- Return fewer codes if fewer are relevant.
+- Return only codes from the provided pool — do not invent codes.
+- Use the SYSTEM and CODE values from the [SYSTEM:CODE] identifiers in the candidate list for your output."""
+
+
 def build_planner_messages(
     query: str, attempt_history: list[Attempt]
 ) -> list[BaseMessage]:
@@ -142,13 +156,28 @@ def build_evaluator_messages(
     return [SystemMessage(content=_EVALUATOR_SYSTEM), HumanMessage(content=human)]
 
 
+def build_re_ranker_messages(
+    query: str, pool: list[CodeResult], flat_results: int
+) -> list[BaseMessage]:
+    code_lines = "\n".join(
+        f"  [{r.system}:{r.code}] {r.display}" for r in pool
+    )
+    human = (
+        f"Query: {query}\n\n"
+        f"Candidate codes ({len(pool)} total):\n{code_lines}\n\n"
+        f"Return the top {flat_results} codes most relevant to the query, "
+        f"ranked most to least relevant."
+    )
+    return [SystemMessage(content=_RE_RANKER_SYSTEM), HumanMessage(content=human)]
+
+
 _SUMMARIZER_SYSTEM = """You are a clinical information specialist. Write a single concise paragraph (3–5 sentences) summarizing what was found and why.
 
 Guidelines:
 - Base your summary strictly on the reasoning trace provided. Do not add clinical context from your own knowledge beyond what the trace supports.
 - State what the query is about, which systems were searched, and what was found.
 - If refinement occurred, briefly note what changed (e.g., a search term was revised after initial results were empty).
-- Do not repeat individual codes or list results by system — those are shown separately above.
+- Do not repeat individual codes — they are shown above ranked by relevance to the query.
 - If no results were found across any system, return a single sentence explaining this and suggesting the user rephrase using a recognized clinical term.
 - If a "Cap-hit" note appears in the input, explicitly state that the search reached its refinement limit without fully satisfying the query. Name the specific gap(s) the evaluator identified. Suggest the user rephrase or narrow the query to get better results."""
 
@@ -189,17 +218,13 @@ def _format_trace(attempt_history: list[Attempt]) -> str:
 
 def build_summarizer_messages(
     query: str,
-    consolidated: dict[SystemName, list[CodeResult]],
+    consolidated: list[CodeResult],
     rationale: str,
     attempt_history: list[Attempt],
 ) -> list[BaseMessage]:
     result_lines: list[str] = []
-    for system, results in consolidated.items():
-        result_lines.append(f"  {system}:")
-        for r in results[:5]:
-            result_lines.append(f"    - {r.display} [{r.code}]")
-        if not results:
-            result_lines.append("    (no results)")
+    for i, r in enumerate(consolidated[:settings.flat_results], 1):
+        result_lines.append(f"  {i}. [{r.system} {r.code}] {r.display}")
 
     cap_hit = (
         bool(attempt_history)

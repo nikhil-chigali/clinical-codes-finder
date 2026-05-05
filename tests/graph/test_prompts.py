@@ -124,9 +124,7 @@ def test_build_summarizer_messages() -> None:
     from langchain_core.messages import HumanMessage, SystemMessage
     from clinical_codes.graph.prompts import build_summarizer_messages
 
-    consolidated = {
-        SystemName.ICD10CM: [_make_result(SystemName.ICD10CM, "Essential (primary) hypertension", "I10")],
-    }
+    consolidated = [_make_result(SystemName.ICD10CM, "Essential (primary) hypertension", "I10")]
     attempt = _attempt()
     messages = build_summarizer_messages(
         "hypertension", consolidated, "ICD-10-CM covers diagnoses", [attempt]
@@ -139,7 +137,7 @@ def test_build_summarizer_messages() -> None:
     human = messages[1].content
     assert "hypertension" in human
     assert "Essential (primary) hypertension" in human
-    assert "[I10]" in human
+    assert "ICD10CM I10" in human        # new flat format: "1. [ICD10CM I10] ..."
     assert "Reasoning trace" in human
     assert "Iteration" in human
 
@@ -151,9 +149,9 @@ def test_summarizer_truncates_to_five() -> None:
         _make_result(SystemName.ICD10CM, f"Result {i}", f"X{i:02d}") for i in range(10)
     ]
     human = build_summarizer_messages(
-        "test", {SystemName.ICD10CM: results}, "rationale", [_attempt()]
+        "test", results, "rationale", [_attempt()]
     )[1].content
-    assert "Result 4" in human      # 5th result shown
+    assert "Result 4" in human      # 5th result shown (index 4)
     assert "Result 5" not in human  # 6th result excluded
 
 
@@ -162,7 +160,7 @@ def test_build_summarizer_cap_hit_note_present() -> None:
 
     # _attempt() has decision="refine" — simulates iteration cap firing
     attempt = _attempt()
-    human = build_summarizer_messages("hypertension", {}, "rationale", [attempt])[1].content
+    human = build_summarizer_messages("hypertension", [], "rationale", [attempt])[1].content
     assert "Cap-hit" in human
     assert "LOINC returned no results for this drug query" in human
 
@@ -176,5 +174,38 @@ def test_build_summarizer_no_cap_hit_when_sufficient() -> None:
         raw_results={},
         evaluator_output=_evaluator_output(decision="sufficient"),
     )
-    human = build_summarizer_messages("hypertension", {}, "rationale", [attempt])[1].content
+    human = build_summarizer_messages("hypertension", [], "rationale", [attempt])[1].content
     assert "Cap-hit" not in human
+
+
+def test_build_re_ranker_messages() -> None:
+    from langchain_core.messages import HumanMessage, SystemMessage
+    from clinical_codes.graph.prompts import build_re_ranker_messages
+
+    pool = [
+        CodeResult(system=SystemName.ICD10CM, code="I10", display="Essential hypertension", score=1.0, raw={}),
+        CodeResult(system=SystemName.RXNORM, code="854901", display="lisinopril 20 MG Oral Tablet", score=0.9, raw={}),
+    ]
+    messages = build_re_ranker_messages("hypertension", pool, flat_results=5)
+
+    assert len(messages) == 2
+    assert isinstance(messages[0], SystemMessage)
+    assert isinstance(messages[1], HumanMessage)
+    human = messages[1].content
+    assert "hypertension" in human
+    assert "[ICD10CM:I10]" in human
+    assert "Essential hypertension" in human
+    assert "[RXNORM:854901]" in human
+    assert "lisinopril 20 MG Oral Tablet" in human
+    assert "relevance ranker" in messages[0].content
+
+
+def test_build_re_ranker_messages_includes_flat_results_count() -> None:
+    from clinical_codes.graph.prompts import build_re_ranker_messages
+
+    pool = [
+        CodeResult(system=SystemName.ICD10CM, code="I10", display="Essential hypertension", score=1.0, raw={}),
+    ]
+    messages = build_re_ranker_messages("test", pool, flat_results=3)
+    human = messages[1].content
+    assert "top 3" in human  # flat_results count must appear in the "Return the top N" instruction

@@ -49,7 +49,7 @@ def _make_state(**overrides) -> dict:
         "raw_results": {},
         "evaluator_output": None,
         "attempt_history": [],
-        "consolidated": {},
+        "consolidated": [],
         "summary": "",
     }
     base.update(overrides)
@@ -65,156 +65,151 @@ def _make_mock_client(results: list[CodeResult]) -> MagicMock:
     return client
 
 
-# ── Consolidator ──────────────────────────────────────────────────────────────
+# ── Re_ranker ─────────────────────────────────────────────────────────────────
 
-def test_consolidator_filters_to_selected_systems() -> None:
-    from clinical_codes.graph.nodes import consolidator
+async def test_re_ranker_empty_pool_returns_empty() -> None:
+    from clinical_codes.graph.nodes import re_ranker
 
-    # LOINC is in raw_results but not in selected_systems (dropped on refinement)
-    state = _make_state(
-        planner_output=_make_planner_output(
-            systems=[SystemName.ICD10CM],
-            terms={SystemName.ICD10CM: "hypertension"},
-        ),
-        raw_results={
-            SystemName.ICD10CM: [_make_result(SystemName.ICD10CM, "I10", "Essential hypertension")],
-            SystemName.LOINC: [_make_result(SystemName.LOINC, "L001", "Blood pressure panel")],
-        },
-    )
-    result = consolidator(state)
-    assert SystemName.ICD10CM in result["consolidated"]
-    assert SystemName.LOINC not in result["consolidated"]
-
-
-def test_consolidator_deduplicates_by_code() -> None:
-    from clinical_codes.graph.nodes import consolidator
-
-    state = _make_state(
-        raw_results={
-            SystemName.ICD10CM: [
-                _make_result(SystemName.ICD10CM, "I10", "Essential hypertension", score=1.0),
-                _make_result(SystemName.ICD10CM, "I10", "Duplicate entry", score=0.9),
-                _make_result(SystemName.ICD10CM, "I11", "Hypertensive heart disease", score=0.8),
-            ]
-        },
-    )
-    result = consolidator(state)
-    codes = [r.code for r in result["consolidated"][SystemName.ICD10CM]]
-    assert codes.count("I10") == 1
-    assert "I11" in codes
-
-
-def test_consolidator_sorts_by_score_descending() -> None:
-    from clinical_codes.graph.nodes import consolidator
-
-    state = _make_state(
-        raw_results={
-            SystemName.ICD10CM: [
-                _make_result(SystemName.ICD10CM, "I11", "Heart disease", score=0.5),
-                _make_result(SystemName.ICD10CM, "I10", "Hypertension", score=1.0),
-            ]
-        },
-    )
-    result = consolidator(state)
-    scores = [r.score for r in result["consolidated"][SystemName.ICD10CM]]
-    assert scores == sorted(scores, reverse=True)
-
-
-def test_consolidator_trims_to_display_results() -> None:
-    from clinical_codes.graph.nodes import consolidator
-
-    results = [
-        _make_result(SystemName.ICD10CM, f"I{i:02d}", f"Result {i}", score=1.0 - i * 0.05)
-        for i in range(7)
-    ]
-    state = _make_state(raw_results={SystemName.ICD10CM: results})
-    result = consolidator(state)
-    assert len(result["consolidated"][SystemName.ICD10CM]) == settings.display_results  # 5
-
-
-def test_consolidator_dedup_keeps_highest_score() -> None:
-    from clinical_codes.graph.nodes import consolidator
-
-    # Lower-scored duplicate appears first — must keep the higher-scored entry.
-    state = _make_state(
-        raw_results={
-            SystemName.ICD10CM: [
-                _make_result(SystemName.ICD10CM, "I10", "Low score entry", score=0.5),
-                _make_result(SystemName.ICD10CM, "I10", "High score entry", score=1.0),
-            ]
-        },
-    )
-    result = consolidator(state)
-    kept = result["consolidated"][SystemName.ICD10CM][0]
-    assert kept.score == 1.0
-
-
-def test_consolidator_empty_results_system() -> None:
-    from clinical_codes.graph.nodes import consolidator
-
-    # ICD10CM selected but not in raw_results (API failed for this system)
+    # No raw results for the selected system → empty pool, no LLM call
     state = _make_state(raw_results={})
-    result = consolidator(state)
-    assert SystemName.ICD10CM in result["consolidated"]
-    assert result["consolidated"][SystemName.ICD10CM] == []
+    with patch("clinical_codes.graph.nodes._re_ranker_chain") as mock_chain:
+        result = await re_ranker(state)
+        mock_chain.ainvoke.assert_not_called()
+    assert result["consolidated"] == []
 
 
-def test_consolidator_filters_by_relevant_codes() -> None:
-    from clinical_codes.graph.nodes import consolidator
+async def test_re_ranker_small_pool_skips_llm() -> None:
+    from clinical_codes.graph.nodes import re_ranker
 
+    # Pool has (flat_results - 2) codes ≤ flat_results — returns as-is, no LLM call
+    results = [_make_result(SystemName.ICD10CM, f"I{i:02d}", f"Result {i}") for i in range(settings.flat_results - 2)]
+    state = _make_state(raw_results={SystemName.ICD10CM: results})
+
+    with patch("clinical_codes.graph.nodes._re_ranker_chain") as mock_chain:
+        result = await re_ranker(state)
+        mock_chain.ainvoke.assert_not_called()
+
+    assert result["consolidated"] == results
+
+
+async def test_re_ranker_calls_llm_for_large_pool() -> None:
+    from clinical_codes.graph.nodes import re_ranker
+    from clinical_codes.graph.state import RankedCode, ReRankerOutput
+
+    # Pool has (flat_results + 2) codes > flat_results — LLM called, top flat_results returned in order
+    results = [_make_result(SystemName.ICD10CM, f"I{i:02d}", f"Result {i}") for i in range(settings.flat_results + 2)]
+    state = _make_state(raw_results={SystemName.ICD10CM: results})
+
+    top_codes = [RankedCode(system=SystemName.ICD10CM, code=f"I{i:02d}") for i in range(settings.flat_results)]
+    mock_output = ReRankerOutput(ranked_codes=top_codes)
+
+    with patch("clinical_codes.graph.nodes._re_ranker_chain") as mock_chain:
+        mock_chain.ainvoke = AsyncMock(return_value=mock_output)
+        result = await re_ranker(state)
+
+    assert len(result["consolidated"]) == settings.flat_results
+    assert [r.code for r in result["consolidated"]] == [f"I{i:02d}" for i in range(settings.flat_results)]
+
+
+async def test_re_ranker_applies_domain_filter() -> None:
+    from clinical_codes.graph.nodes import re_ranker
+
+    # evaluator keeps only I10 — I51 is filtered before pool, so pool size is 1 (≤ 5)
     state = _make_state(
         evaluator_output=_make_evaluator_output(
             relevant_codes={SystemName.ICD10CM: ["I10"]}
         ),
         raw_results={
             SystemName.ICD10CM: [
-                _make_result(SystemName.ICD10CM, "I10", "Essential hypertension", score=1.0),
-                _make_result(SystemName.ICD10CM, "I51", "Unspecified heart disease", score=0.9),
+                _make_result(SystemName.ICD10CM, "I10", "Essential hypertension"),
+                _make_result(SystemName.ICD10CM, "I51", "Unspecified heart disease"),
             ]
         },
     )
-    result = consolidator(state)
-    codes = [r.code for r in result["consolidated"][SystemName.ICD10CM]]
+    with patch("clinical_codes.graph.nodes._re_ranker_chain") as mock_chain:
+        result = await re_ranker(state)
+        mock_chain.ainvoke.assert_not_called()  # pool ≤ flat_results after filter
+
+    codes = [r.code for r in result["consolidated"]]
     assert codes == ["I10"]
     assert "I51" not in codes
 
 
-def test_consolidator_no_filter_when_relevant_codes_empty() -> None:
-    from clinical_codes.graph.nodes import consolidator
+async def test_re_ranker_applies_domain_filter_and_calls_llm_for_large_remaining_pool() -> None:
+    from clinical_codes.graph.nodes import re_ranker
+    from clinical_codes.graph.state import RankedCode, ReRankerOutput
 
-    # empty relevant_codes dict (key absent for this system) — all results pass through
-    state = _make_state(
-        evaluator_output=_make_evaluator_output(relevant_codes={}),
-        raw_results={
-            SystemName.ICD10CM: [
-                _make_result(SystemName.ICD10CM, "I10", "Essential hypertension", score=1.0),
-                _make_result(SystemName.ICD10CM, "I51", "Unspecified heart disease", score=0.9),
-            ]
-        },
-    )
-    result = consolidator(state)
-    codes = [r.code for r in result["consolidated"][SystemName.ICD10CM]]
-    assert "I10" in codes
-    assert "I51" in codes
-
-
-def test_consolidator_empty_list_removes_all_results() -> None:
-    from clinical_codes.graph.nodes import consolidator
-
-    # relevant_codes has an empty list for ICD10CM — all results judged irrelevant
+    # Evaluator keeps all but one code. Remaining pool is (flat_results + 1) → LLM still called.
+    n = settings.flat_results + 2
+    all_codes = [f"I{i:02d}" for i in range(n)]
+    results = [_make_result(SystemName.ICD10CM, code, f"Result {i}") for i, code in enumerate(all_codes)]
+    # Drop the last code via domain filter — remaining pool = flat_results + 1 > flat_results
+    keep_codes = all_codes[:-1]
     state = _make_state(
         evaluator_output=_make_evaluator_output(
-            relevant_codes={SystemName.ICD10CM: []}
+            relevant_codes={SystemName.ICD10CM: keep_codes}
         ),
-        raw_results={
-            SystemName.ICD10CM: [
-                _make_result(SystemName.ICD10CM, "I10", "Essential hypertension", score=1.0),
-                _make_result(SystemName.ICD10CM, "I51", "Unspecified heart disease", score=0.9),
-            ]
-        },
+        raw_results={SystemName.ICD10CM: results},
     )
-    result = consolidator(state)
-    assert result["consolidated"][SystemName.ICD10CM] == []
+
+    top_codes = [RankedCode(system=SystemName.ICD10CM, code=c) for c in keep_codes[:settings.flat_results]]
+    mock_output = ReRankerOutput(ranked_codes=top_codes)
+
+    with patch("clinical_codes.graph.nodes._re_ranker_chain") as mock_chain:
+        mock_chain.ainvoke = AsyncMock(return_value=mock_output)
+        result = await re_ranker(state)
+        mock_chain.ainvoke.assert_called_once()  # LLM was called despite the filter
+
+    codes = [r.code for r in result["consolidated"]]
+    assert len(codes) == settings.flat_results
+    assert all_codes[-1] not in codes  # filtered code is absent
+
+
+async def test_re_ranker_drops_invalid_llm_codes() -> None:
+    from clinical_codes.graph.nodes import re_ranker
+    from clinical_codes.graph.state import RankedCode, ReRankerOutput
+
+    # Pool has (flat_results + 2) codes — LLM path triggered. LLM returns a code not in pool → dropped.
+    results = [_make_result(SystemName.ICD10CM, f"I{i:02d}", f"Result {i}") for i in range(settings.flat_results + 2)]
+    state = _make_state(raw_results={SystemName.ICD10CM: results})
+
+    ranked = [
+        RankedCode(system=SystemName.ICD10CM, code="I00"),    # in pool
+        RankedCode(system=SystemName.ICD10CM, code="FAKE99"), # not in pool — must be dropped
+        RankedCode(system=SystemName.ICD10CM, code="I01"),    # in pool
+    ]
+
+    with patch("clinical_codes.graph.nodes._re_ranker_chain") as mock_chain:
+        mock_chain.ainvoke = AsyncMock(return_value=ReRankerOutput(ranked_codes=ranked))
+        result = await re_ranker(state)
+
+    codes = [r.code for r in result["consolidated"]]
+    assert "FAKE99" not in codes
+    assert "I00" in codes
+    assert "I01" in codes
+
+
+async def test_re_ranker_deduplicates_llm_output() -> None:
+    from clinical_codes.graph.nodes import re_ranker
+    from clinical_codes.graph.state import RankedCode, ReRankerOutput
+
+    # Pool has (flat_results + 2) codes — LLM path triggered. LLM returns I00 twice — second occurrence dropped.
+    results = [_make_result(SystemName.ICD10CM, f"I{i:02d}", f"Result {i}") for i in range(settings.flat_results + 2)]
+    state = _make_state(raw_results={SystemName.ICD10CM: results})
+
+    ranked = [
+        RankedCode(system=SystemName.ICD10CM, code="I00"),
+        RankedCode(system=SystemName.ICD10CM, code="I00"),  # duplicate
+        RankedCode(system=SystemName.ICD10CM, code="I01"),
+    ]
+
+    with patch("clinical_codes.graph.nodes._re_ranker_chain") as mock_chain:
+        mock_chain.ainvoke = AsyncMock(return_value=ReRankerOutput(ranked_codes=ranked))
+        result = await re_ranker(state)
+
+    codes = [r.code for r in result["consolidated"]]
+    assert codes.count("I00") == 1
+    assert "I01" in codes
 
 
 # ── Planner ───────────────────────────────────────────────────────────────────
@@ -381,7 +376,7 @@ async def test_summarizer_writes_summary() -> None:
     from clinical_codes.graph.nodes import summarizer
 
     po = _make_planner_output()
-    consolidated = {SystemName.ICD10CM: [_make_result(SystemName.ICD10CM, "I10", "Hypertension")]}
+    consolidated = [_make_result(SystemName.ICD10CM, "I10", "Hypertension")]
 
     fake_response = MagicMock()
     fake_response.content = "Hypertension is a condition..."

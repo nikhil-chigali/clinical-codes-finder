@@ -6,11 +6,12 @@ class Settings(BaseSettings):
 
     anthropic_api_key: str = ""
 
-    # LLM model — all three LLM nodes (planner, evaluator, summarizer) use this model
+    # LLM model — all LLM nodes use this model
     llm_model: str = "claude-sonnet-4-6"
-    # Temperatures per scope.md: 0 for deterministic planning/evaluation, 0.3 for prose
+    # Temperatures per scope.md: 0 for deterministic planning/evaluation/re-ranking, 0.3 for prose
     planner_temperature: float = 0.0
     evaluator_temperature: float = 0.0
+    re_ranker_temperature: float = 0.0
     summarizer_temperature: float = 0.3
 
     # NLM Clinical Tables API — trailing slash so httpx joins paths correctly
@@ -20,13 +21,13 @@ class Settings(BaseSettings):
     api_backoff_base: float = 1.0  # first retry delay in seconds; doubles each attempt
 
     fetch_results: int = 10   # results fetched per system per executor call
-    display_results: int = 5  # results kept in the final consolidated response
+    flat_results: int = 5     # total codes returned across all systems after re-ranking
 
-    confidence_threshold: float = 0.5  # consolidator score floor (reserved) — evaluator uses semantic judgment, not this threshold
+    confidence_threshold: float = 0.5  # reserved — evaluator uses semantic judgment, not this threshold
 
 
 settings = Settings()
 
 MAX_ITERATIONS = 2  # cap enforced in route_after_evaluator, not in LLM prompts
 NODE_PLANNER = "planner"
-NODE_CONSOLIDATOR = "consolidator"
+NODE_RE_RANKER = "re_ranker"
