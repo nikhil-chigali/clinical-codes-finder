@@ -141,7 +141,8 @@ Guidelines:
 - State what the query is about, which systems were searched, and what was found.
 - If refinement occurred, briefly note what changed (e.g., a search term was revised after initial results were empty).
 - Do not repeat individual codes or list results by system — those are shown separately above.
-- If no results were found across any system, return a single sentence explaining this and suggesting the user rephrase using a recognized clinical term."""
+- If no results were found across any system, return a single sentence explaining this and suggesting the user rephrase using a recognized clinical term.
+- If a "Cap-hit" note appears in the input, explicitly state that the search reached its refinement limit without fully satisfying the query. Name the specific gap(s) the evaluator identified. Suggest the user rephrase or narrow the query to get better results."""
 
 
 def effective_search_terms(attempt_history: list[Attempt]) -> dict[SystemName, str]:
@@ -192,9 +193,22 @@ def build_summarizer_messages(
         if not results:
             result_lines.append("    (no results)")
 
+    cap_hit = (
+        bool(attempt_history)
+        and attempt_history[-1].evaluator_output.decision == "refine"
+    )
+    trace_block = f"Reasoning trace:\n{_format_trace(attempt_history)}\n"
+    if cap_hit:
+        last_feedback = attempt_history[-1].evaluator_output.feedback
+        trace_block += (
+            f"\nCap-hit: the refinement limit was reached. "
+            f"Evaluator's final assessment: {last_feedback}\n"
+        )
+
     human = (
         f"Query: {query}\n\n"
-        f"Reasoning trace:\n{_format_trace(attempt_history)}\n\n"
-        f"Final results:\n" + "\n".join(result_lines)
+        + trace_block
+        + f"\nFinal results:\n"
+        + "\n".join(result_lines)
     )
     return [SystemMessage(content=_SUMMARIZER_SYSTEM), HumanMessage(content=human)]

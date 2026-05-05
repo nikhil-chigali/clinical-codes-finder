@@ -155,3 +155,26 @@ def test_summarizer_truncates_to_five() -> None:
     )[1].content
     assert "Result 4" in human      # 5th result shown
     assert "Result 5" not in human  # 6th result excluded
+
+
+def test_build_summarizer_cap_hit_note_present() -> None:
+    from clinical_codes.graph.prompts import build_summarizer_messages
+
+    # _attempt() has decision="refine" — simulates iteration cap firing
+    attempt = _attempt()
+    human = build_summarizer_messages("hypertension", {}, "rationale", [attempt])[1].content
+    assert "Cap-hit" in human
+    assert "LOINC returned no results for this drug query" in human
+
+
+def test_build_summarizer_no_cap_hit_when_sufficient() -> None:
+    from clinical_codes.graph.prompts import build_summarizer_messages
+
+    attempt = Attempt(
+        iteration=1,
+        planner_output=_planner_output(),
+        raw_results={},
+        evaluator_output=_evaluator_output(decision="sufficient"),
+    )
+    human = build_summarizer_messages("hypertension", {}, "rationale", [attempt])[1].content
+    assert "Cap-hit" not in human
