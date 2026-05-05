@@ -35,15 +35,32 @@ The pipeline is a LangGraph state machine. At its core is a tight **Planner → 
 
 ### Step-by-step
 
-**Planner** receives the raw query and first decomposes it into meaningful clinical components before selecting systems. `"ecoli 10000"` decomposes into an organism name (`"ecoli"` → LOINC) and a numeric quantity (`"10000"` → UCUM); `"diabetes"` is a single component (bare disease name → ICD-10-CM only). Each component is mapped to a domain anchor and the planner selects the union of systems needed to cover all of them. It then generates one search term per system — short, keyword-optimized phrases rather than full descriptions, since the Clinical Tables APIs work best with abbreviated terms. On refinement, the planner receives the prior search terms, the list of weak systems, and the evaluator's diagnosis; it can revise both system selection and search terms in the same call.
+**Planner** (LLM)
+- Decomposes the query into meaningful clinical components before selecting systems — `"ecoli 10000"` → organism name (`"ecoli"` → LOINC) + numeric quantity (`"10000"` → UCUM); `"diabetes"` → single component → ICD-10-CM only.
+- Maps each component to a domain anchor and selects the union of systems needed to cover all of them.
+- Generates one short, keyword-optimized search term per system (abbreviated phrases work; verbose descriptions don't).
+- On refinement: receives prior search terms, weak systems, and the evaluator's diagnosis; can revise both system selection and search terms in the same call.
 
-**Executor** fans out concurrently to all selected APIs using `asyncio.gather`. Each system is called independently — a timeout or error on one does not block the others. Results are normalized to a common `{code, display, score, raw}` shape. The `score` field is a rank-position value: `(total - rank) / total`, mapping the API's result ordering to [0, 1]. The top API result always scores 1.0 regardless of how well it matches the query — this is **not** a semantic similarity score.
+**Executor** (async fan-out)
+- Calls all selected APIs concurrently via `asyncio.gather` — a timeout or error on one system does not block the others.
+- Normalizes results to a common `{code, display, score, raw}` shape.
+- `score` is a rank-position value: `(total - rank) / total`. The top API result always scores 1.0 — this is **not** a semantic similarity score.
 
-**Evaluator** runs two checks before deciding whether to continue or refine. First, a *result quality check*: are the returned display names semantically relevant to the query? Second, a *coverage check*: is every meaningful component of the original query addressed by at least one selected system? A numeric quantity with no unit system selected, or a drug name with no RxNorm results, both trigger refinement even if the other systems returned strong results. When refinement fires, the evaluator provides a plain-English diagnosis — what's missing or mismatched — but does not prescribe what to do next. The planner, which has full domain context in its system prompt, decides the remediation. The loop is hard-capped at 2 iterations in graph state (not prompted).
+**Evaluator** (LLM)
+- Runs a *result quality check*: are the returned display names semantically relevant to the query?
+- Runs a *coverage check*: is every meaningful component of the original query addressed by at least one selected system? A numeric quantity with no unit system, or a drug name with no RxNorm results, triggers refinement even if other systems returned strong results.
+- On refinement: provides a plain-English diagnosis of what's missing or mismatched, but does not prescribe what to do — the planner decides the remediation.
+- Hard-capped at 2 iterations in graph state (not prompted into the LLM).
 
-**Consolidator** is the only fully deterministic node. It deduplicates within each system by code, sorts by API rank score descending, and keeps the top 5 per system. Results stay **grouped by system** — there is intentionally no cross-system ranking or score normalization. The rank-position score is meaningful within a single system's response (it reflects that API's own relevance ordering) but not across systems: a score of 1.0 from LOINC and 1.0 from UCUM both mean "top result in that API's response" — they carry no comparable semantic weight. Normalizing them into a flat ranked list would be false precision. The evaluator is the semantic quality gate; the consolidator's job is to organize what made it through, preserving the per-system grouping that makes results interpretable to different clinical audiences.
+**Consolidator** (deterministic)
+- Deduplicates within each system by code, sorts by API rank score descending, keeps top 5 per system.
+- Results stay **grouped by system** — no cross-system ranking or score normalization.
+- Why not normalize: the rank-position score is meaningful within one system's response but not across systems. A score of 1.0 from LOINC and 1.0 from UCUM both mean "top result in that API's response" — they carry no comparable semantic weight. Flattening them into a single ranked list would be false precision. The evaluator is the semantic quality gate; the consolidator organizes what made it through.
 
-**Summarizer** takes the consolidated results and the planner's rationale and writes a plain-English explanation for a non-technical reader — patient, student, or general clinician. It explains what each selected system covers, what was found, and why that system was relevant to this query. Medical terms are defined inline.
+**Summarizer** (LLM)
+- Writes a plain-English explanation for a non-technical reader — patient, student, or general clinician.
+- Covers what each selected system is, what was found, and why that system was relevant to the query.
+- Defines medical terms inline.
 
 ### Why this architecture, and not ReAct?
 
