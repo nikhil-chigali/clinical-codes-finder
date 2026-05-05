@@ -5,7 +5,7 @@ from clinical_codes.schemas import CodeResult, SystemName
 
 SYSTEM_CATALOG: dict[SystemName, str] = {
     SystemName.ICD10CM: "Diagnosis and condition codes. Use for diseases, symptoms, injuries, and clinical conditions.",
-    SystemName.LOINC: "Lab tests and clinical observations. Use for measurements, panels, and diagnostic procedures. The API uses abbreviated panel names — search with short keyword phrases (e.g., 'urine culture', 'glucose serum') not full descriptions.",
+    SystemName.LOINC: "Lab tests and clinical observations. Use for measurements, panels, and diagnostic procedures.",
     SystemName.RXNORM: "Drug names and medications. Use for drugs, dosage forms, and active ingredients.",
     SystemName.HCPCS: "Procedures, devices, and supplies billed to Medicare/Medicaid. Use for equipment, therapies, and clinical services.",
     SystemName.UCUM: "Units of measure. Use for measurement units such as mg/dL, mmol/L, or beats per minute.",
@@ -39,11 +39,11 @@ Selection rules:
   - Unit of measure (e.g. "mg/dL", "mmol/L") → UCUM only (a unit embedded in a drug dosage string, such as "mg" in "metformin 500 mg", is not a standalone UCUM query)
 - If the query is clearly not a clinical term — random characters, keyboard mash, or non-medical questions — return an empty system selection and state this in the rationale.
 - Generate exactly one search term per selected system.
-- Generate short search terms (1–3 key words). LOINC in particular uses abbreviated panel labels — "urine culture" finds results; "Escherichia coli colony count urine culture" finds nothing. Prefer the shortest phrase that captures the core clinical concept.
 
 On refinement:
 - You will receive the prior attempt's search terms, weak systems, and the evaluator's diagnosis.
 - Based on the diagnosis, you may: retry a weak system with a different search term, drop a weak system that does not cover this query type, or add a system not in the original selection if the diagnosis suggests the query spans a different domain.
+- If a system returned no results, the search term was likely too specific or too long. The Clinical Tables API behaves like an autocomplete — it matches on keyword prefixes, so a concise 1–3 word phrase finds results where a full clinical description does not. Shorten the term to its core concept (e.g. "urine culture" instead of "Escherichia coli colony count urine culture") and retry.
 - Systems that returned strong results do not need to be re-queried; omit them from search_terms."""
 
 

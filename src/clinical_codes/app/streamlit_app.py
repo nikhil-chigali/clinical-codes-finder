@@ -75,17 +75,40 @@ if search and query.strip():
 
     # ── Reasoning trace ───────────────────────────────────────────────────────
     st.divider()
-    with st.expander("🔍 Reasoning trace"):
-        if len(attempt_history) > 1:
-            n = len(attempt_history)
-            st.caption(f"🔁 {n} iterations")
+    label = f"Reasoning trace ({len(attempt_history)} iteration{'s' if len(attempt_history) != 1 else ''})"
+    with st.expander(label):
         for i, attempt in enumerate(attempt_history):
-            systems = ", ".join(s.value for s in attempt.planner_output.selected_systems)
-            st.markdown(f"**Iteration {attempt.iteration}** · {systems}")
-            st.caption(attempt.planner_output.rationale)
-            if attempt.evaluator_output.decision == "sufficient":
-                st.success("✓ Sufficient")
+            po = attempt.planner_output
+            ev = attempt.evaluator_output
+
+            st.markdown(f"#### Iteration {attempt.iteration}")
+
+            st.markdown("**Planner**")
+            st.caption(po.rationale)
+            term_rows = [
+                {"System": s.value, "Search term": po.search_terms.get(s, "")}
+                for s in po.selected_systems
+            ]
+            st.dataframe(term_rows, use_container_width=True, hide_index=True)
+
+            st.markdown("**Results**")
+            result_rows = []
+            for s in po.selected_systems:
+                hits = attempt.raw_results.get(s, [])
+                result_rows.append({
+                    "System": s.value,
+                    "Hits": len(hits),
+                    "Top results": ", ".join(r.display for r in hits[:3]) or "—",
+                })
+            st.dataframe(result_rows, use_container_width=True, hide_index=True)
+
+            st.markdown("**Evaluator**")
+            if ev.decision == "sufficient":
+                st.success("Sufficient — all systems returned relevant results.")
             else:
-                st.warning(f"↩ Refine — {attempt.evaluator_output.feedback}")
+                weak = ", ".join(s.value for s in ev.weak_systems) if ev.weak_systems else "—"
+                st.warning(f"Refine · weak systems: {weak}")
+                st.caption(ev.feedback)
+
             if i < len(attempt_history) - 1:
                 st.divider()
