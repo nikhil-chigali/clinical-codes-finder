@@ -134,7 +134,29 @@ The API is designed as a two-step UI flow: search by drug name → pick a streng
 
 ---
 
-## 8. Scaling beyond 6 systems
+## 8. Evaluator semantic filtering — clinical intent, not entity overlap
+
+**Decision:** The evaluator populates `relevant_codes: dict[SystemName, list[str]]` on every pass (sufficient and refine), listing only codes that match the *clinical intent* of the query. The consolidator applies this filter before dedup/trim.
+
+**The clinical intent standard:** A result must match the *type* of test, drug, or condition the query is asking about — not merely mention the same entity. Examples:
+- Query `"ecoli 10000"` (urine culture colony count) → a LOINC FISH blood assay for E. coli does **not** match, even though it mentions E. coli.
+- Query `"metformin 500 mg"` → a LOINC plasma metformin level panel does **not** match; RxNorm drug formulation codes **do** match.
+- Query `"hypertension"` → ICD-10-CM I10 (primary hypertension) **matches**; I51.9 (unspecified heart disease, a complication) does **not**.
+
+**Why filter in the evaluator, not a separate node:** The evaluator already reads every result display name to make its sufficiency decision. Filtering is a natural extension of the same judgment — no additional LLM call, no new node. The evaluator's `relevant_codes` output costs a handful of extra tokens in the structured response.
+
+**Why populate on refine, not only on sufficient:** If the iteration cap fires and the pipeline is forced forward on a "refine" decision, `relevant_codes` is already populated with the best available filtered set. Without this, all raw results — including those the evaluator explicitly judged as intent-mismatches — would flow through unfiltered.
+
+**Empty list vs absent key in `relevant_codes`:**
+- Key absent → system had no raw results; consolidator skips filter (nothing to filter).
+- Empty list `[]` → system had results but all were intent-mismatches; consolidator removes all results for that system.
+- Non-empty list → consolidator keeps only those codes, discards the rest.
+
+This distinction is enforced with `if keep is not None` in the consolidator (not `if keep`), so an empty list correctly removes all results rather than being treated as "no filter."
+
+---
+
+## 9. Scaling beyond 6 systems
 
 The current implementation embeds system descriptions directly in the planner prompt. This is appropriate for a fixed catalog of 6, but breaks down at scale.
 

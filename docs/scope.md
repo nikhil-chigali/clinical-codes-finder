@@ -66,14 +66,18 @@ Accept a single natural-language clinical query, infer which of six medical codi
 
 ## Evaluator rules
 
+The evaluator applies a **clinical intent** standard — not surface-level entity overlap. A result must match the *type* of test, drug, or condition the query is asking about, not merely mention the same organism or term.
+
 Refinement is triggered if **any** planner-selected system meets either condition:
 
 1. **Empty results** — the API returned 0 results for that system.
-2. **Low-confidence results** — all returned results for that system fall below a confidence threshold.
+2. **Intent mismatch** — the returned results do not match the clinical intent of the query (e.g., a urine culture query gets molecular blood assay codes; a drug query gets lab panel codes).
 
-**Confidence threshold:** `0.5` on a normalized 0–1 scale (initial value; to be refined after examining real API responses across all six systems).
+**Coverage check:** if any meaningful component of the query is unrepresented by any selected system, that is always a refine decision — even if other systems returned strong results.
 
-**Refinement loop:** loops back to `planner` carrying the original query plus the evaluator's diagnosis of what went wrong. The planner receives the prior attempt's results as context and may revise both system selection and search terms — not just search terms. Systems that returned strong results are not re-queried.
+**Semantic filter (`relevant_codes`):** on every pass (sufficient *and* refine), the evaluator lists per system which specific codes match the clinical intent. The consolidator applies this filter before dedup/trim. An empty list for a system removes all its results. This ensures that if the iteration cap fires and the pipeline is forced forward on a "refine" decision, the best available filtered set is used rather than all raw results.
+
+**Refinement loop:** loops back to `planner` carrying the original query plus the evaluator's diagnosis of what went wrong. The planner receives the prior attempt's results as context and may revise both system selection and search terms — not just search terms. Systems that returned strong results are not re-queried. If a system returned no results, the planner is guided to shorten its search term (the API is autocomplete-style; concise phrases find results where full descriptions do not).
 
 ---
 

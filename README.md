@@ -5,7 +5,7 @@ An agentic system that takes a natural-language clinical term and returns releva
 ![Python](https://img.shields.io/badge/python-3.12%2B-blue?logo=python&logoColor=white)
 ![LangGraph](https://img.shields.io/badge/LangGraph-0.2%2B-orange)
 ![Streamlit](https://img.shields.io/badge/Streamlit-1.35%2B-red?logo=streamlit&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-105%20passing-brightgreen?logo=pytest&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-108%20passing-brightgreen?logo=pytest&logoColor=white)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 > 🎬 **Demo video:** coming soon
@@ -47,16 +47,19 @@ The pipeline is a LangGraph state machine. At its core is a tight **Planner → 
 - `score` is a rank-position value: `(total - rank) / total`. The top API result always scores 1.0 — this is **not** a semantic similarity score.
 
 **Evaluator** (LLM)
-- Runs a *result quality check*: are the returned display names semantically relevant to the query?
+- Applies a *clinical intent* standard throughout — not surface-level entity overlap. A LOINC FISH blood assay for E. coli does not match a urine culture query, even though it mentions E. coli. A code must match the *type* of test, drug, or condition the query is asking about.
+- Runs a *result quality check*: does each system's results match the clinical intent of the query?
 - Runs a *coverage check*: is every meaningful component of the original query addressed by at least one selected system? A numeric quantity with no unit system, or a drug name with no RxNorm results, triggers refinement even if other systems returned strong results.
+- Runs a *semantic filter*: populates `relevant_codes` — a per-system list of codes that match the clinical intent. Codes that mention the same entity but represent a different type of test or procedure are excluded. The consolidator applies this filter before dedup/trim. Populated on every pass (sufficient and refine), so if the iteration cap forces the pipeline forward, the best available filtered set is used.
 - On refinement: provides a plain-English diagnosis of what's missing or mismatched, but does not prescribe what to do — the planner decides the remediation.
 - Outputs a binary decision (sufficient / refine), not a numeric score — LLMs are poor calibrators; a score of 0.7 carries no stable meaning across runs. The prose diagnosis in `feedback` is more actionable than any number would be.
 - Hard-capped at 2 iterations in graph state (not prompted into the LLM).
 
 **Consolidator** (deterministic)
-- Deduplicates within each system by code, sorts by API rank score descending, keeps top 5 per system.
+- Applies the evaluator's semantic filter first: keeps only codes listed in `relevant_codes` for each system. If a system's list is empty (all results irrelevant), that system produces no output. If a system has no entry in `relevant_codes` (it wasn't re-queried in the final pass and was already strong), its results pass through unfiltered.
+- Then deduplicates by code, sorts by API rank score descending, keeps top 5 per system.
 - Results stay **grouped by system** — no cross-system ranking or score normalization.
-- Why not normalize: the rank-position score is meaningful within one system's response but not across systems. A score of 1.0 from LOINC and 1.0 from UCUM both mean "top result in that API's response" — they carry no comparable semantic weight. Flattening them into a single ranked list would be false precision. The evaluator is the semantic quality gate; the consolidator organizes what made it through.
+- Why not normalize: the rank-position score is meaningful within one system's response but not across systems. A score of 1.0 from LOINC and 1.0 from UCUM both mean "top result in that API's response" — they carry no comparable semantic weight. Flattening them into a single ranked list would be false precision. The evaluator is the clinical intent gate; the consolidator organizes what made it through.
 
 **Summarizer** (LLM)
 - Writes a plain-English explanation for a non-technical reader — patient, student, or general clinician.
@@ -68,7 +71,7 @@ The pipeline is a LangGraph state machine. At its core is a tight **Planner → 
 The instinct on agent assignments is to reach for ReAct (think → act → observe in a loop with one LLM). I deliberately chose **Plan-and-Execute with parallel fan-out and a bounded refinement loop** instead:
 
 - **The 6 coding systems are independent.** A search in LOINC has no bearing on a search in HCPCS. ReAct would needlessly serialize them, wasting latency and tokens on coordination the task doesn't need.
-- **Most queries resolve in one pass.** The evaluator only triggers refinement when results are empty or semantically irrelevant to the query — not on every query. This keeps the median path cheap.
+- **Most queries resolve in one pass.** The evaluator only triggers refinement when results are empty or don't match the clinical intent of the query — not on every query. This keeps the median path cheap.
 - **Per-system fan-out gives clean traces.** Each tool call is a separate observable unit, easier to debug and evaluate than a single agent juggling 6 tools through one prompt.
 - **The loop is bounded (max 2 iterations).** Unbounded refinement is where agents go to die. The cap is enforced in graph state, not prompted into the LLM.
 
@@ -98,7 +101,7 @@ The planner prompt encodes explicit per-domain routing rules (bare disease → I
 git clone <repo-url> && cd clinical-codes-finder
 uv sync                    # or: pip install -e .
 cp .env.example .env       # add ANTHROPIC_API_KEY
-uv run pytest              # confirm 105 tests pass
+uv run pytest              # confirm 108 tests pass
 ```
 
 ## Usage
@@ -227,6 +230,8 @@ clinical-codes-finder/
 - **RxNorm dose-string fallback** — Queries like `"metformin 500 mg"` previously returned zero results because the RxTerms API prefix-matches on drug display names. The fix detects dose patterns, retries with just the drug name, and ranks results so the matching strength surfaces first. Top-3 recall improved from 0.43 → 0.51.
 - **Planner conservative defaults** — Replaced `"select 1–3 systems"` with explicit domain anchors (bare disease → ICD-10-CM, drug → RxNorm, lab test → LOINC, etc.) and a conservative default of 1 system. System-selection F1 improved from 0.69 → 0.85 (+23%); simple query precision went from ~0.33 to near-perfect.
 - **Miss-query catch** — Added an instruction to return empty system selection for clearly non-clinical inputs (keyboard mash, non-medical questions). All 3 miss-type queries now score system_f1 = 1.0 (was 0.67 average).
+- **Evaluator semantic filtering** — The evaluator now populates `relevant_codes` on every pass (sufficient and refine), listing only codes that match the clinical intent of the query. The consolidator applies this filter before dedup/trim, removing off-topic results that would otherwise survive on API rank alone. Evaluation standard tightened from "semantically related" to "matches the clinical intent" — a LOINC molecular assay is not a match for a urine culture query even if it mentions the same organism.
+- **Refinement autocomplete guidance** — On refinement, if a system returned no results, the planner is now guided to shorten its search term (the Clinical Tables API is autocomplete-style; concise 1–3 word phrases find results where full descriptions do not).
 
 **Longer-term:**
 - **Split the planner into a deterministic router + LLM planner** for cost efficiency. Cheap rules or a small classifier handles 80% of unambiguous queries (e.g. "mg/dL" → UCUM); LLM only fires on the ambiguous tail.
