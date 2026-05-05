@@ -12,6 +12,7 @@ from rich.rule import Rule
 from clinical_codes.cli.display import render_error, render_results, update_status
 from clinical_codes.config import settings
 from clinical_codes.graph.builder import build_graph, make_initial_state
+from clinical_codes.graph.prompts import effective_search_terms
 
 app = typer.Typer(add_completion=False)
 
@@ -115,8 +116,7 @@ async def _run_async(
         print(json.dumps(result, indent=2))
         return
 
-    search_terms = attempt_history[-1].planner_output.search_terms if attempt_history else {}
-    render_results(console, consolidated, search_terms, verbose=verbose)
+    render_results(console, consolidated, effective_search_terms(attempt_history), verbose=verbose)
 
     if verbose and attempt_history:
         console.print(Rule("Iterations"))

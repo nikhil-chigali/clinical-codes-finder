@@ -131,6 +131,19 @@ Guidelines:
 - If no results were found across any system, return a single sentence explaining this and suggesting the user rephrase using a recognized clinical term."""
 
 
+def effective_search_terms(attempt_history: list[Attempt]) -> dict[SystemName, str]:
+    """Return the last search term used per system across all iterations.
+
+    On refinement the planner omits strong systems from search_terms, so the
+    final planner_output.search_terms is incomplete. Walking the full history
+    and letting later iterations overwrite earlier ones gives a complete map.
+    """
+    terms: dict[SystemName, str] = {}
+    for attempt in attempt_history:
+        terms.update(attempt.planner_output.search_terms)
+    return terms
+
+
 def _format_trace(attempt_history: list[Attempt]) -> str:
     lines: list[str] = []
     for attempt in attempt_history:

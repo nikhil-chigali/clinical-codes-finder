@@ -5,7 +5,7 @@ import asyncio
 import streamlit as st
 
 from clinical_codes.graph.builder import build_graph, make_initial_state
-from clinical_codes.graph.prompts import SYSTEM_CATALOG
+from clinical_codes.graph.prompts import SYSTEM_CATALOG, effective_search_terms
 
 st.set_page_config(page_title="Clinical Codes Finder", layout="wide")
 
@@ -45,7 +45,7 @@ if search and query.strip():
     consolidated = state["consolidated"]
     summary = state["summary"]
     attempt_history = state["attempt_history"]
-    search_terms = state["planner_output"].search_terms
+    search_terms = effective_search_terms(state["attempt_history"])
 
     # ── Results ───────────────────────────────────────────────────────────────
     st.divider()
