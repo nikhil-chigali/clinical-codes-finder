@@ -28,12 +28,10 @@
     <text x="22" y="44" fill="#0f172a">Async executor</text>
     <rect x="0" y="54" width="14" height="14" rx="3" fill="#dcfce7" stroke="#166534"/>
     <text x="22" y="66" fill="#0f172a">External API</text>
-    <rect x="0" y="76" width="14" height="14" rx="3" fill="#f1f5f9" stroke="#475569"/>
-    <text x="22" y="88" fill="#0f172a">Deterministic</text>
-    <line x1="0" y1="105" x2="14" y2="105" stroke="#ea580c" stroke-width="1.5" stroke-dasharray="4 3"/>
-    <text x="22" y="109" fill="#0f172a">Refinement loop</text>
-    <line x1="0" y1="122" x2="14" y2="122" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="5 3"/>
-    <text x="22" y="126" fill="#0f172a">Miss-query bypass</text>
+    <line x1="0" y1="82" x2="14" y2="82" stroke="#ea580c" stroke-width="1.5" stroke-dasharray="4 3"/>
+    <text x="22" y="86" fill="#0f172a">Refinement loop</text>
+    <line x1="0" y1="99" x2="14" y2="99" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="5 3"/>
+    <text x="22" y="103" fill="#0f172a">Miss-query bypass</text>
   </g>
 
   <!-- User Query -->
@@ -48,7 +46,7 @@
   <text x="440" y="200" text-anchor="middle" font-size="11" font-style="italic" fill="#1e3a8a">re-entered on refinement with prior attempt as context</text>
   <line x1="440" y1="212" x2="440" y2="245" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)"/>
 
-  <!-- Miss-query short-circuit: planner → consolidator (right side) -->
+  <!-- Miss-query short-circuit: planner → re_ranker (right side) -->
   <path d="M 610 176 L 855 176 L 855 575 L 590 575"
         stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="5 3"
         fill="none" stroke-linejoin="round"
@@ -120,10 +118,10 @@
   <line x1="440" y1="510" x2="440" y2="540" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)"/>
   <text x="468" y="530" font-size="11" font-style="italic" fill="#475569">sufficient</text>
 
-  <!-- consolidator -->
-  <rect x="290" y="545" width="300" height="60" rx="8" fill="#f1f5f9" stroke="#475569" stroke-width="1.5"/>
-  <text x="440" y="568" text-anchor="middle" font-size="14" font-weight="600" fill="#0f172a">consolidator</text>
-  <text x="440" y="588" text-anchor="middle" font-size="11" fill="#0f172a">deterministic • dedup, group, rank</text>
+  <!-- re_ranker -->
+  <rect x="290" y="545" width="300" height="60" rx="8" fill="#dbeafe" stroke="#1e40af" stroke-width="1.5"/>
+  <text x="440" y="568" text-anchor="middle" font-size="14" font-weight="600" fill="#1e3a8a">re_ranker</text>
+  <text x="440" y="588" text-anchor="middle" font-size="11" fill="#1e3a8a">LLM • pool domain-filtered codes, rank by query relevance</text>
   <line x1="440" y1="605" x2="440" y2="635" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)"/>
 
   <!-- summarizer -->

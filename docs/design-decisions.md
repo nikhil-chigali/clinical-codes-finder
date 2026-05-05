@@ -11,10 +11,10 @@ Captures the key architectural decisions made during design sessions, with ratio
 **Why this matters:** The score is **not** a semantic similarity score — it is purely a position score. If a system returns any results, its top result always gets 1.0 regardless of how well it matches the query. This means threshold-based quality checks ("all results below 0.5") are near-meaningless for non-empty result sets.
 
 **What the score is used for:**
-- **Consolidator** — orders results within each system to select the top `display_results` (5) for the final response. The API's ordering is a reasonable proxy for term relevance.
+- **Re_ranker pool ordering** — within a single system's contribution to the pool, API order is preserved as a tiebreak. The LLM then re-ranks the full cross-system pool by query relevance, superseding positional score entirely.
 - **Not used by the evaluator** — the evaluator performs semantic relevance judgment instead (see §2).
 
-**`confidence_threshold` in `config.py`:** Currently vestigial. It was designed for a threshold-based evaluator check that was superseded by semantic evaluation. Retained in config for potential future use (e.g., a consolidator filter).
+**`confidence_threshold` in `config.py`:** Currently vestigial. It was designed for a threshold-based evaluator check that was superseded by semantic evaluation. Retained in config for potential future use.
 
 ---
 
@@ -106,7 +106,7 @@ The API is designed as a two-step UI flow: search by drug name → pick a streng
 **Why per-strength expansion (`_parse_strengths`):**
 - The API returns rows where each row represents one drug+form group with comma-separated CUIs and strengths (parallel arrays).
 - The expected code for `"lisinopril 20 mg"` is a specific-strength CUI, not the generic group CUI returned by `_parse_response`.
-- Expanding per-strength gives the evaluator and consolidator the right granularity to surface the exact dose match. Dose-matching entries are ranked first via a `matching` / `others` bucket sort keyed on `dose_norm in strength.lower()`.
+- Expanding per-strength gives the evaluator and re_ranker the right granularity to surface the exact dose match. Dose-matching entries are ranked first via a `matching` / `others` bucket sort keyed on `dose_norm in strength.lower()`.
 
 **Display format:** `"lisinopril (Oral Pill) — 20 MG Tablet"` — drug group name plus specific strength, separated by an em dash. This is fully qualified and human-readable in the Streamlit UI and summarizer output.
 
@@ -140,7 +140,7 @@ The API is designed as a two-step UI flow: search by drug name → pick a streng
 
 ## 8. Evaluator semantic filtering — clinical domain, not sub-type specificity
 
-**Decision:** The evaluator populates `relevant_codes: dict[SystemName, list[str]]` on every pass (sufficient and refine), listing only codes that belong to the correct clinical domain for the query. The consolidator applies this filter before dedup/trim.
+**Decision:** The evaluator populates `relevant_codes: dict[SystemName, list[str]]` on every pass (sufficient and refine), listing only codes that belong to the correct clinical domain for the query. The re_ranker applies this filter before pooling.
 
 **The clinical domain standard:** Filter results that are from a fundamentally different clinical category — not results that represent the same entity through a different method, specimen type, or sub-classification. The API's own ranking handles relevance within a domain; the evaluator's job is to catch cross-domain mismatches.
 
@@ -158,11 +158,11 @@ Within-domain variation (keep — trust the API):
 **Why populate on refine, not only on sufficient:** If the iteration cap fires and the pipeline is forced forward on a "refine" decision, `relevant_codes` is already populated with the best available filtered set. Without this, all raw results — including those the evaluator judged as domain-mismatches — would flow through unfiltered.
 
 **Empty list vs absent key in `relevant_codes`:**
-- Key absent → system had no raw results; consolidator skips filter (nothing to filter).
-- Empty list `[]` → system had results but all were domain-mismatches; consolidator removes all results for that system.
-- Non-empty list → consolidator keeps only those codes, discards the rest.
+- Key absent → system had no raw results; re_ranker skips filter (nothing to filter).
+- Empty list `[]` → system had results but all were domain-mismatches; re_ranker excludes all results for that system from the pool.
+- Non-empty list → re_ranker keeps only those codes in the pool, discards the rest.
 
-This distinction is enforced with `if keep is not None` in the consolidator (not `if keep`), so an empty list correctly removes all results rather than being treated as "no filter."
+This distinction is enforced with `if keep is not None` in the re_ranker (not `if keep`), so an empty list correctly removes all results rather than being treated as "no filter."
 
 ---
 
@@ -188,16 +188,36 @@ The current implementation embeds system descriptions directly in the planner pr
 
 ---
 
-## 10. Miss-query short-circuit — planner → consolidator when no systems selected
+## 10. Miss-query short-circuit — planner → re_ranker when no systems selected
 
-**Decision:** Add a conditional edge from the planner: if `selected_systems` is empty, route directly to the consolidator, bypassing the executor and evaluator entirely.
+**Decision:** Add a conditional edge from the planner: if `selected_systems` is empty, route directly to the re_ranker, bypassing the executor and evaluator entirely.
 
 **Background:** The planner prompt already instructs the model to return an empty system selection for gibberish, keyboard mash, or clearly non-clinical inputs, and state this in the rationale. Before this change, the graph ignored the empty selection and still ran the executor (no-op, since there are no search terms) and the evaluator. The evaluator, faced with zero results across zero systems, had nothing to evaluate — yet consistently returned `"refine"` with feedback like "there is nothing to evaluate." This triggered a second planner call, which again returned empty, burning the iteration cap before the pipeline could exit cleanly.
 
 **Why the evaluator returned "refine":** The evaluator is prompted to return "sufficient" only when every selected system returned at least one result that matches clinical intent. With zero selected systems and zero results, neither condition is satisfied — so "refine" is technically correct by its own prompt logic. Fixing the evaluator prompt to handle this edge case is fragile; short-circuiting in the graph is the robust solution.
 
-**Implementation:** `route_after_planner` in `builder.py` checks `state["planner_output"].selected_systems`. Empty → `NODE_CONSOLIDATOR`; non-empty → `"executor"`. The consolidator loops over `selected_systems` (empty), producing `consolidated = {}`. The summarizer receives an empty result set and its "no results" prompt guideline handles the rest.
+**Implementation:** `route_after_planner` in `builder.py` checks `state["planner_output"].selected_systems`. Empty → `NODE_RE_RANKER`; non-empty → `"executor"`. The re_ranker builds an empty pool (no selected systems), returning `consolidated = []`. The summarizer receives an empty result set and its "no results" prompt guideline handles the rest.
 
 **Cost:** A miss query now costs exactly one LLM call (planner only), down from three (planner × 2 + evaluator × 2 under the old cap). No executor HTTP calls, no evaluator calls.
 
 **Trade-off:** `attempt_history` is empty for miss queries (the evaluator is what appends `Attempt` records). The reasoning trace in the UI shows "0 iterations" — acceptable, since there was no search to trace.
+
+---
+
+## 11. Re_ranker — LLM cross-system relevance ranking replaces deterministic consolidator
+
+**Decision:** Replace the deterministic `consolidator` (dedup, group by system, rank by API position) with an LLM-based `re_ranker` that pools domain-filtered codes from all systems and returns a flat top-N list ordered by query relevance.
+
+**The problem with API rank position:** The API's positional score (rank 0 always = 1.0) is a tiebreak within one system, not a semantic similarity score. A marginally relevant code that ranked first in LOINC would always appear before a highly specific match that ranked third in RxNorm. There was no mechanism to compare codes against the original user query, and results were grouped by system rather than by relevance.
+
+**Why flat output over grouped-by-system:** Grouping by system was an organizing convenience, not a clinical requirement. A user querying "lisinopril 20 mg" cares whether the top result is the specific-strength RxNorm code — not which system the second and third results come from. A flat relevance-ordered list answers the actual question: "what is most relevant to my query?"
+
+**Why an LLM for ranking (not score normalization):** Cross-system score normalization would be false precision — a 1.0 from LOINC and a 1.0 from UCUM both mean "top result in that API's response" with no common semantic scale. An LLM can apply the same clinical reasoning the user would: it prefers "lisinopril 20 MG Oral Tablet" over "lisinopril (Oral Pill)" for the query "lisinopril 20 mg" because specificity matters here.
+
+**Short-circuit paths (no LLM cost):**
+- Empty pool (all systems filtered out, or no systems selected) → return `[]` immediately.
+- Pool ≤ `flat_results` (5) → return pool as-is in API order, no ranking needed.
+
+**`consolidated` state field:** type changed from `dict[SystemName, list[CodeResult]]` to `list[CodeResult]`. System is still a field on each `CodeResult`, so all downstream consumers (summarizer, UI) access it via `r.system` — no grouped dict needed.
+
+**Trade-off:** The re_ranker adds one LLM call per query when the pool is larger than `flat_results`. This is acceptable: it fires only after the evaluator has already made a sufficient/refine decision (1–2 LLM calls), and it replaces a deterministic step that provided no query-relevance signal. The short-circuit paths keep miss queries and simple single-result queries at zero additional cost.

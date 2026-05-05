@@ -14,7 +14,7 @@ Accept a single natural-language clinical query, infer which of six medical codi
 
 | Constraint | Value |
 |---|---|
-| Graph nodes | 5 (planner → executor → evaluator → consolidator → summarizer). Short-circuit: planner → consolidator when `selected_systems` is empty (miss queries skip executor + evaluator entirely). |
+| Graph nodes | 5 (planner → executor → evaluator → re_ranker → summarizer). Short-circuit: planner → re_ranker when `selected_systems` is empty (miss queries skip executor + evaluator entirely). |
 | Query turns | Single-turn only. No conversational follow-up; state resets per query. |
 | Coding systems | ICD-10-CM, LOINC, RxNorm, HCPCS, UCUM, HPO |
 | Refinement cap | 2 iterations maximum, enforced in graph state (not prompted) |
@@ -33,13 +33,14 @@ Accept a single natural-language clinical query, infer which of six medical codi
 |---|---|---|
 | `planner` | claude-sonnet-4-6 | Jointly selects systems and generates search terms in one call — both decisions require clinical vocabulary reasoning (e.g. knowing "metformin" maps to RxNorm drug names but "glucose lab" maps to LOINC panel names). Term quality directly gates result quality, and on refinement the model must re-evaluate its own prior system selection, not just retry terms. Haiku is insufficient for this combined reasoning task. |
 | `evaluator` | claude-sonnet-4-6 | Makes a quality judgment that determines whether refinement fires. A wrong call is costly: false "sufficient" exits with bad results; false "refine" wastes an iteration. The 2-iteration cap means there is no safety net for a weak evaluator. |
+| `re_ranker` | claude-sonnet-4-6 | Requires clinical vocabulary reasoning to rank by query relevance — e.g. knowing "lisinopril 20 MG Oral Tablet" is more specific than "lisinopril (Oral Pill)" for the query "lisinopril 20 mg". |
 | `summarizer` | claude-sonnet-4-6 | Synthesizes codes across systems into coherent prose for a potentially non-technical audience. Quality of language matters here. |
 
 ### Temperature
 
 | Node(s) | Temperature | Justification |
 |---|---|---|
-| `planner`, `evaluator` | `0` | Deterministic output required for reproducible evaluation runs. Variation in system selection or quality judgments would make eval metrics meaningless across runs. |
+| `planner`, `evaluator`, `re_ranker` | `0` | Deterministic output required for reproducible evaluation runs. Variation in system selection, quality judgments, or ranking order would make eval metrics meaningless across runs. |
 | `summarizer` | `0.3` | Slightly warmer for more natural prose. Still constrained enough to stay factual; loose enough to avoid robotic repetition when summarizing similar result sets. |
 
 ---
@@ -51,7 +52,7 @@ Accept a single natural-language clinical query, infer which of six medical codi
 | Parameter | Value | Justification |
 |---|---|---|
 | Fetch (per system, per call) | 10 results | Gives the evaluator enough signal to assess result quality. Beyond 10, marginal results are unlikely to change the refine/sufficient decision. |
-| Display (per system, in final response) | Top 5 by confidence score | Enough for clinical utility without overwhelming output. Filtered after consolidation. |
+| Display (flat ranked list, final response) | Top 5 by query relevance | Enough for clinical utility without overwhelming output. Re_ranker pools all systems and ranks by LLM relevance score. |
 
 ### Reliability
 
@@ -77,7 +78,7 @@ Within-domain variation is kept: a query for "ecoli" against LOINC accepts FISH 
 
 **Coverage check:** if any meaningful component of the query is unrepresented by any selected system, that is always a refine decision — even if other systems returned strong results.
 
-**Semantic filter (`relevant_codes`):** on every pass (sufficient *and* refine), the evaluator lists per system which specific codes belong to the correct clinical domain. The consolidator applies this filter before dedup/trim. An empty list for a system removes all its results. This ensures that if the iteration cap fires and the pipeline is forced forward on a "refine" decision, the best available filtered set is used rather than all raw results.
+**Semantic filter (`relevant_codes`):** on every pass (sufficient *and* refine), the evaluator lists per system which specific codes belong to the correct clinical domain. The re_ranker applies this filter before pooling. An empty list for a system removes all its results. This ensures that if the iteration cap fires and the pipeline is forced forward on a "refine" decision, the best available filtered set is used rather than all raw results.
 
 **Cap-hit summarizer behavior:** when the iteration cap fires and the decision is still "refine", the summarizer receives an explicit note naming the evaluator's final feedback. It is instructed to surface this in the summary — stating that the search was incomplete, naming the specific gap, and suggesting the user rephrase or narrow the query.
 
@@ -87,15 +88,14 @@ Within-domain variation is kept: a query for "ecoli" against LOINC accepts FISH 
 
 ## Output contract
 
-The final response includes, per system selected by the planner:
+The final response includes:
 
-- System label (e.g., `LOINC`, `RxNorm`)
-- Up to 5 results, each with: code, display name, confidence score
-- Plain-English summary explaining what was found and why each system was included
+- A flat ranked list of up to 5 codes, ordered by query relevance. Each entry has: system label, code, display name.
+- Plain-English summary explaining what was found and why each system was included.
 
 The response does **not** surface which systems were excluded by the planner. The UI displays all 6 systems in a fixed sidebar so the user always knows what the system covers.
 
-**Out-of-scope / miss queries:** the planner returns an empty `selected_systems` and states this in its rationale. The graph short-circuits directly to the consolidator (executor and evaluator are not called), producing an empty result set. The summarizer issues a single-sentence polite refusal explaining that the query does not map to any supported coding system, with a suggestion to rephrase using a clinical term.
+**Out-of-scope / miss queries:** the planner returns an empty `selected_systems` and states this in its rationale. The graph short-circuits directly to re_ranker (executor and evaluator are not called), producing an empty result set. The summarizer issues a single-sentence polite refusal explaining that the query does not map to any supported coding system, with a suggestion to rephrase using a clinical term.
 
 *Output structure is subject to iteration after examining real API responses.*
 

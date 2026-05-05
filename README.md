@@ -27,10 +27,10 @@ This project demonstrates an agent that **infers intent**, **routes to the relev
 
 The pipeline is a LangGraph state machine. At its core is a tight **Planner → Executor → Evaluator** loop:
 
-1. **`planner`** — LLM. In a single call, picks which of the 6 coding systems are relevant **and** generates per-system search terms. On refinement, it's re-entered with the prior attempt's results as context, so it can revise both decisions jointly. If no systems are selected (gibberish or non-clinical query), the graph short-circuits directly to the consolidator — executor and evaluator are never called.
+1. **`planner`** — LLM. In a single call, picks which of the 6 coding systems are relevant **and** generates per-system search terms. On refinement, it's re-entered with the prior attempt's results as context, so it can revise both decisions jointly. If no systems are selected (gibberish or non-clinical query), the graph short-circuits directly to re_ranker — executor and evaluator are never called.
 2. **`executor`** — Async fan-out. Calls only the selected Clinical Tables APIs concurrently. Per-system failures are isolated.
-3. **`evaluator`** — LLM. Inspects results and decides: *sufficient* → forward to consolidation; *weak* → loop back to planner with feedback. Capped at 2 iterations.
-4. **`consolidator`** — Deterministic. Dedups, groups by system, ranks by API result order.
+3. **`evaluator`** — LLM. Inspects results and decides: *sufficient* → forward to re-ranking; *weak* → loop back to planner with feedback. Capped at 2 iterations.
+4. **`re_ranker`** — LLM. Pools domain-filtered results from all systems, then ranks them by query relevance using an LLM. Returns a flat ordered list (max 5). Short-circuits without an LLM call for empty or small pools.
 5. **`summarizer`** — LLM. Plain-English explanation with reasoning trace.
 
 ### Step-by-step
@@ -50,16 +50,17 @@ The pipeline is a LangGraph state machine. At its core is a tight **Planner → 
 - Applies a *clinical domain* standard — filters results that belong to a fundamentally different clinical category than what the query requires. Within-domain variation (different specimen type, test method, sub-classification) is kept; the API's own ranking handles relevance within a system. Example: a query for "ecoli" against LOINC accepts FISH assays, blood cultures, and urine cultures equally — all are E. coli lab tests. Only a cross-domain result (a drug code appearing in lab results) is filtered.
 - Runs a *result quality check*: does each system's results belong to the correct clinical domain for the query?
 - Runs a *coverage check*: is every meaningful component of the original query addressed by at least one selected system? A numeric quantity with no unit system, or a drug name with no RxNorm results, triggers refinement even if other systems returned strong results.
-- Runs a *semantic filter*: populates `relevant_codes` — a per-system list of codes that match the clinical intent. Codes that mention the same entity but represent a different type of test or procedure are excluded. The consolidator applies this filter before dedup/trim. Populated on every pass (sufficient and refine), so if the iteration cap forces the pipeline forward, the best available filtered set is used.
+- Runs a *semantic filter*: populates `relevant_codes` — a per-system list of codes that match the clinical intent. Codes that mention the same entity but represent a different type of test or procedure are excluded. The re_ranker applies this filter before pooling. Populated on every pass (sufficient and refine), so if the iteration cap forces the pipeline forward, the best available filtered set is used.
 - On refinement: provides a plain-English diagnosis of what's missing or mismatched, but does not prescribe what to do — the planner decides the remediation.
 - Outputs a binary decision (sufficient / refine), not a numeric score — LLMs are poor calibrators; a score of 0.7 carries no stable meaning across runs. The prose diagnosis in `feedback` is more actionable than any number would be.
 - Hard-capped at 2 iterations in graph state (not prompted into the LLM).
 
-**Consolidator** (deterministic)
-- Applies the evaluator's semantic filter first: keeps only codes listed in `relevant_codes` for each system. If a system's list is empty (all results irrelevant), that system produces no output. If a system has no entry in `relevant_codes` (it wasn't re-queried in the final pass and was already strong), its results pass through unfiltered.
-- Then deduplicates by code, sorts by API rank score descending, keeps top 5 per system.
-- Results stay **grouped by system** — no cross-system ranking or score normalization.
-- Why not normalize: the rank-position score is meaningful within one system's response but not across systems. A score of 1.0 from LOINC and 1.0 from UCUM both mean "top result in that API's response" — they carry no comparable semantic weight. Flattening them into a single ranked list would be false precision. The evaluator is the clinical intent gate; the consolidator organizes what made it through.
+**Re-ranker** (LLM)
+- Applies the evaluator's semantic filter first: keeps only codes listed in `relevant_codes` for each system. If a system's list is empty (all results irrelevant), that system contributes nothing to the pool.
+- Flattens all domain-filtered results from every selected system into a single pool.
+- If the pool is empty or small (≤ 5), returns it immediately without an LLM call.
+- Otherwise, calls an LLM with the query and the full pool; the LLM returns the top-5 most relevant codes ranked most-to-least relevant.
+- Output is a **flat ordered list** — system is metadata on each result, not an organizing structure. Codes are ordered by query relevance, not grouped by system.
 
 **Summarizer** (LLM)
 - Writes a plain-English explanation for a non-technical reader — patient, student, or general clinician.
@@ -179,7 +180,7 @@ clinical-codes-finder/
 │   ├── graph/                         # LangGraph state machine
 │   │   ├── state.py                   # GraphState TypedDict, PlannerOutput, EvaluatorOutput
 │   │   ├── prompts.py                 # all prompt templates in one place
-│   │   ├── nodes.py                   # planner, executor, evaluator, consolidator, summarizer
+│   │   ├── nodes.py                   # planner, executor, evaluator, re_ranker, summarizer
 │   │   └── builder.py                 # build_graph() — wires nodes + conditional edges
 │   │
 │   ├── evaluation/
@@ -221,7 +222,7 @@ clinical-codes-finder/
 - **Single-turn.** No conversational follow-ups (e.g. "now narrow to type 2"). State is reset per query.
 - **Refinement capped at 2 iterations.** Long-tail ambiguous queries may not converge; this is by design — unbounded loops are worse than honest failure.
 - **No caching.** Every query hits Clinical Tables fresh. A simple TTL cache would meaningfully cut API calls in production.
-- **Ranking relies on Clinical Tables' built-in result order.** No learned re-ranker; result ordering is only as good as the API's own scoring.
+- **Re-ranker is only as good as the LLM's clinical vocabulary.** It ranks by query relevance using an LLM, which handles specificity well but may not perfectly distinguish sub-type variants (e.g., different specimen types for the same lab test).
 
 ---
 
@@ -231,9 +232,10 @@ clinical-codes-finder/
 - **RxNorm dose-string fallback** — Queries like `"metformin 500 mg"` previously returned zero results because the RxTerms API prefix-matches on drug display names. The fix detects dose patterns, retries with just the drug name, and ranks results so the matching strength surfaces first. Top-3 recall improved from 0.43 → 0.51.
 - **Planner conservative defaults** — Replaced `"select 1–3 systems"` with explicit domain anchors (bare disease → ICD-10-CM, drug → RxNorm, lab test → LOINC, etc.) and a conservative default of 1 system. System-selection F1 improved from 0.69 → 0.85 (+23%); simple query precision went from ~0.33 to near-perfect.
 - **Miss-query catch** — Added an instruction to return empty system selection for clearly non-clinical inputs (keyboard mash, non-medical questions). All 3 miss-type queries now score system_f1 = 1.0 (was 0.67 average).
-- **Evaluator semantic filtering** — The evaluator populates `relevant_codes` on every pass (sufficient and refine), listing only codes that belong to the correct clinical domain for the query. The consolidator applies this filter before dedup/trim. The standard is cross-domain mismatch (drug query → lab codes = filter) not sub-type specificity (E. coli FISH assay vs urine culture = same domain, keep both — trust the API's ranking).
+- **Evaluator semantic filtering** — The evaluator populates `relevant_codes` on every pass (sufficient and refine), listing only codes that belong to the correct clinical domain for the query. The re_ranker applies this filter before pooling. The standard is cross-domain mismatch (drug query → lab codes = filter) not sub-type specificity (E. coli FISH assay vs urine culture = same domain, keep both).
+- **Result re-ranking** — Replaced the deterministic consolidator with an LLM-based re_ranker that pools domain-filtered results from all systems and ranks them by query relevance. Output is a flat ordered list (max 5) instead of grouped-by-system tables. The LLM prefers specificity ("lisinopril 20 MG Oral Tablet" over "lisinopril (Oral Pill)" for the query "lisinopril 20 mg").
 - **Refinement autocomplete guidance** — On refinement, if a system returned no results, the planner is now guided to shorten its search term (the Clinical Tables API is autocomplete-style; concise 1–3 word phrases find results where full descriptions do not).
-- **Miss-query short-circuit** — When the planner returns an empty system selection (gibberish, keyboard mash, non-clinical input), the graph now routes directly to the consolidator, skipping executor and evaluator entirely. Previously these queries burned 2 full iterations as the evaluator wrongly voted "refine" on nothing. Now they resolve in a single planner call.
+- **Miss-query short-circuit** — When the planner returns an empty system selection (gibberish, keyboard mash, non-clinical input), the graph now routes directly to the re_ranker, skipping executor and evaluator entirely. Previously these queries burned 2 full iterations as the evaluator wrongly voted "refine" on nothing. Now they resolve in a single planner call.
 - **Summarizer cap-hit callout** — When the refinement cap fires and the pipeline is forced forward on a "refine" decision, the summarizer now explicitly flags the incomplete search, names the evaluator's identified gap(s), and suggests rephrasing — rather than presenting partial results as a complete answer.
 
 **Longer-term:**
