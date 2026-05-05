@@ -50,6 +50,7 @@ The pipeline is a LangGraph state machine. At its core is a tight **Planner → 
 - Runs a *result quality check*: are the returned display names semantically relevant to the query?
 - Runs a *coverage check*: is every meaningful component of the original query addressed by at least one selected system? A numeric quantity with no unit system, or a drug name with no RxNorm results, triggers refinement even if other systems returned strong results.
 - On refinement: provides a plain-English diagnosis of what's missing or mismatched, but does not prescribe what to do — the planner decides the remediation.
+- Outputs a binary decision (sufficient / refine), not a numeric score — LLMs are poor calibrators; a score of 0.7 carries no stable meaning across runs. The prose diagnosis in `feedback` is more actionable than any number would be.
 - Hard-capped at 2 iterations in graph state (not prompted into the LLM).
 
 **Consolidator** (deterministic)
