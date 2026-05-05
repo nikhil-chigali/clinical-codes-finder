@@ -73,7 +73,7 @@ Systems that returned strong results do not need to be re-queried.
 
 ---
 
-## 5. Summarizer — audience and guidelines
+## 5. Summarizer — audience, guidelines, and cap-hit callout
 
 **Decision:** The summarizer writes for a **non-technical audience** (patient, general clinician, or student). It does not surface which systems were excluded by the planner.
 
@@ -83,6 +83,10 @@ Systems that returned strong results do not need to be re-queried.
 - Why this system was selected (drawn from planner's `rationale` field).
 
 **Tone:** Plain English. Explain medical terms when they appear. No jargon without definition.
+
+**Cap-hit callout:** When the iteration cap fires and the evaluator's final decision is still "refine", `build_summarizer_messages` injects a `Cap-hit:` note into the human message containing the evaluator's final feedback. The system prompt instructs the summarizer to surface this explicitly — stating the search reached its limit without fully satisfying the query, naming the specific gap(s) identified, and suggesting the user rephrase or narrow the query.
+
+**Why flag it explicitly:** Without this, the summarizer would present partial or mismatched results as a complete answer — potentially misleading a non-technical reader who has no visibility into the refinement trace. A brief honest disclosure is more useful than a confident-sounding summary of incomplete data.
 
 ---
 
@@ -175,3 +179,19 @@ The current implementation embeds system descriptions directly in the planner pr
 - Worth considering at UMLS-style integration scale with hundreds of vocabularies.
 
 **Codebase readiness:** Tools already live in per-system modules, and the planner's catalog block is the single place that would be replaced by a registry lookup. None of this is built in the prototype — the system count is fixed at 6.
+
+---
+
+## 10. Miss-query short-circuit — planner → consolidator when no systems selected
+
+**Decision:** Add a conditional edge from the planner: if `selected_systems` is empty, route directly to the consolidator, bypassing the executor and evaluator entirely.
+
+**Background:** The planner prompt already instructs the model to return an empty system selection for gibberish, keyboard mash, or clearly non-clinical inputs, and state this in the rationale. Before this change, the graph ignored the empty selection and still ran the executor (no-op, since there are no search terms) and the evaluator. The evaluator, faced with zero results across zero systems, had nothing to evaluate — yet consistently returned `"refine"` with feedback like "there is nothing to evaluate." This triggered a second planner call, which again returned empty, burning the iteration cap before the pipeline could exit cleanly.
+
+**Why the evaluator returned "refine":** The evaluator is prompted to return "sufficient" only when every selected system returned at least one result that matches clinical intent. With zero selected systems and zero results, neither condition is satisfied — so "refine" is technically correct by its own prompt logic. Fixing the evaluator prompt to handle this edge case is fragile; short-circuiting in the graph is the robust solution.
+
+**Implementation:** `route_after_planner` in `builder.py` checks `state["planner_output"].selected_systems`. Empty → `NODE_CONSOLIDATOR`; non-empty → `"executor"`. The consolidator loops over `selected_systems` (empty), producing `consolidated = {}`. The summarizer receives an empty result set and its "no results" prompt guideline handles the rest.
+
+**Cost:** A miss query now costs exactly one LLM call (planner only), down from three (planner × 2 + evaluator × 2 under the old cap). No executor HTTP calls, no evaluator calls.
+
+**Trade-off:** `attempt_history` is empty for miss queries (the evaluator is what appends `Attempt` records). The reasoning trace in the UI shows "0 iterations" — acceptable, since there was no search to trace.

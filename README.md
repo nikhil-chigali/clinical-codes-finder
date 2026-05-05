@@ -5,7 +5,7 @@ An agentic system that takes a natural-language clinical term and returns releva
 ![Python](https://img.shields.io/badge/python-3.12%2B-blue?logo=python&logoColor=white)
 ![LangGraph](https://img.shields.io/badge/LangGraph-0.2%2B-orange)
 ![Streamlit](https://img.shields.io/badge/Streamlit-1.35%2B-red?logo=streamlit&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-108%20passing-brightgreen?logo=pytest&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-112%20passing-brightgreen?logo=pytest&logoColor=white)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 > 🎬 **Demo video:** coming soon
@@ -27,7 +27,7 @@ This project demonstrates an agent that **infers intent**, **routes to the relev
 
 The pipeline is a LangGraph state machine. At its core is a tight **Planner → Executor → Evaluator** loop:
 
-1. **`planner`** — LLM. In a single call, picks which of the 6 coding systems are relevant **and** generates per-system search terms. On refinement, it's re-entered with the prior attempt's results as context, so it can revise both decisions jointly.
+1. **`planner`** — LLM. In a single call, picks which of the 6 coding systems are relevant **and** generates per-system search terms. On refinement, it's re-entered with the prior attempt's results as context, so it can revise both decisions jointly. If no systems are selected (gibberish or non-clinical query), the graph short-circuits directly to the consolidator — executor and evaluator are never called.
 2. **`executor`** — Async fan-out. Calls only the selected Clinical Tables APIs concurrently. Per-system failures are isolated.
 3. **`evaluator`** — LLM. Inspects results and decides: *sufficient* → forward to consolidation; *weak* → loop back to planner with feedback. Capped at 2 iterations.
 4. **`consolidator`** — Deterministic. Dedups, groups by system, ranks by API result order.
@@ -65,6 +65,7 @@ The pipeline is a LangGraph state machine. At its core is a tight **Planner → 
 - Writes a plain-English explanation for a non-technical reader — patient, student, or general clinician.
 - Covers what each selected system is, what was found, and why that system was relevant to the query.
 - Defines medical terms inline.
+- If the refinement cap fired and the pipeline was forced forward on a "refine" decision, explicitly calls out that the search was incomplete, names the evaluator's identified gap(s), and suggests rephrasing.
 
 ### Why this architecture, and not ReAct?
 
@@ -101,7 +102,7 @@ The planner prompt encodes explicit per-domain routing rules (bare disease → I
 git clone <repo-url> && cd clinical-codes-finder
 uv sync                    # or: pip install -e .
 cp .env.example .env       # add ANTHROPIC_API_KEY
-uv run pytest              # confirm 108 tests pass
+uv run pytest              # confirm 112 tests pass
 ```
 
 ## Usage
@@ -232,6 +233,8 @@ clinical-codes-finder/
 - **Miss-query catch** — Added an instruction to return empty system selection for clearly non-clinical inputs (keyboard mash, non-medical questions). All 3 miss-type queries now score system_f1 = 1.0 (was 0.67 average).
 - **Evaluator semantic filtering** — The evaluator now populates `relevant_codes` on every pass (sufficient and refine), listing only codes that match the clinical intent of the query. The consolidator applies this filter before dedup/trim, removing off-topic results that would otherwise survive on API rank alone. Evaluation standard tightened from "semantically related" to "matches the clinical intent" — a LOINC molecular assay is not a match for a urine culture query even if it mentions the same organism.
 - **Refinement autocomplete guidance** — On refinement, if a system returned no results, the planner is now guided to shorten its search term (the Clinical Tables API is autocomplete-style; concise 1–3 word phrases find results where full descriptions do not).
+- **Miss-query short-circuit** — When the planner returns an empty system selection (gibberish, keyboard mash, non-clinical input), the graph now routes directly to the consolidator, skipping executor and evaluator entirely. Previously these queries burned 2 full iterations as the evaluator wrongly voted "refine" on nothing. Now they resolve in a single planner call.
+- **Summarizer cap-hit callout** — When the refinement cap fires and the pipeline is forced forward on a "refine" decision, the summarizer now explicitly flags the incomplete search, names the evaluator's identified gap(s), and suggests rephrasing — rather than presenting partial results as a complete answer.
 
 **Longer-term:**
 - **Split the planner into a deterministic router + LLM planner** for cost efficiency. Cheap rules or a small classifier handles 80% of unambiguous queries (e.g. "mg/dL" → UCUM); LLM only fires on the ambiguous tail.

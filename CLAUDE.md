@@ -27,11 +27,11 @@ uv run python -m scripts.run_eval --gold data/gold/gold_v0.1.1.json
 
 LangGraph state machine with 5 nodes in `src/clinical_codes/graph/`:
 
-1. **`planner`** (LLM) — in one call, selects 1–3 relevant coding systems **and** generates one search term per selected system. On refinement, re-entered with the prior attempt's results as context, so it can revise both system selection and search terms jointly.
+1. **`planner`** (LLM) — in one call, selects 1–3 relevant coding systems **and** generates one search term per selected system. On refinement, re-entered with the prior attempt's results as context, so it can revise both system selection and search terms jointly. If `selected_systems` is empty (miss/gibberish query), the graph short-circuits directly to consolidator — executor and evaluator are skipped.
 2. **`executor`** (async fan-out) — calls only the selected Clinical Tables APIs concurrently; per-system failures are isolated.
 3. **`evaluator`** (LLM) — decides *sufficient* (forward) or *refine* (loop back to planner); also populates `relevant_codes` (per-system list of codes matching the clinical intent) on every pass. **Capped at 2 iterations** — enforced in graph state, not in the prompt.
 4. **`consolidator`** (deterministic) — applies evaluator's `relevant_codes` semantic filter, then dedup, group by system, rank by API result order.
-5. **`summarizer`** (LLM) — plain-English explanation with reasoning trace.
+5. **`summarizer`** (LLM) — plain-English explanation with reasoning trace. If the iteration cap fired and decision was still "refine", explicitly calls out the incomplete search and names the evaluator's gap.
 
 Graph is assembled in `graph/builder.py`. State shape lives in `graph/state.py`. All prompt templates are centralized in `graph/prompts.py`.
 

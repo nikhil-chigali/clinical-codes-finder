@@ -14,7 +14,7 @@ Accept a single natural-language clinical query, infer which of six medical codi
 
 | Constraint | Value |
 |---|---|
-| Graph nodes | 5 (planner → executor → evaluator → consolidator → summarizer) |
+| Graph nodes | 5 (planner → executor → evaluator → consolidator → summarizer). Short-circuit: planner → consolidator when `selected_systems` is empty (miss queries skip executor + evaluator entirely). |
 | Query turns | Single-turn only. No conversational follow-up; state resets per query. |
 | Coding systems | ICD-10-CM, LOINC, RxNorm, HCPCS, UCUM, HPO |
 | Refinement cap | 2 iterations maximum, enforced in graph state (not prompted) |
@@ -77,6 +77,8 @@ Refinement is triggered if **any** planner-selected system meets either conditio
 
 **Semantic filter (`relevant_codes`):** on every pass (sufficient *and* refine), the evaluator lists per system which specific codes match the clinical intent. The consolidator applies this filter before dedup/trim. An empty list for a system removes all its results. This ensures that if the iteration cap fires and the pipeline is forced forward on a "refine" decision, the best available filtered set is used rather than all raw results.
 
+**Cap-hit summarizer behavior:** when the iteration cap fires and the decision is still "refine", the summarizer receives an explicit note naming the evaluator's final feedback. It is instructed to surface this in the summary — stating that the search was incomplete, naming the specific gap, and suggesting the user rephrase or narrow the query.
+
 **Refinement loop:** loops back to `planner` carrying the original query plus the evaluator's diagnosis of what went wrong. The planner receives the prior attempt's results as context and may revise both system selection and search terms — not just search terms. Systems that returned strong results are not re-queried. If a system returned no results, the planner is guided to shorten its search term (the API is autocomplete-style; concise phrases find results where full descriptions do not).
 
 ---
@@ -91,7 +93,7 @@ The final response includes, per system selected by the planner:
 
 The response does **not** surface which systems were excluded by the planner. The UI displays all 6 systems in a fixed sidebar so the user always knows what the system covers.
 
-**Out-of-scope / miss queries:** polite refusal — a brief message explaining that the query does not map to any of the supported coding systems, with a suggestion to rephrase using a clinical term.
+**Out-of-scope / miss queries:** the planner returns an empty `selected_systems` and states this in its rationale. The graph short-circuits directly to the consolidator (executor and evaluator are not called), producing an empty result set. The summarizer issues a single-sentence polite refusal explaining that the query does not map to any supported coding system, with a suggestion to rephrase using a clinical term.
 
 *Output structure is subject to iteration after examining real API responses.*
 
