@@ -21,11 +21,15 @@ def run_query(gold_query: GoldQuery) -> RunResult:
     try:
         state = asyncio.run(_get_graph().ainvoke(make_initial_state(gold_query.query)))
         latency_s = time.monotonic() - start
-        predicted_systems = list(state["consolidated"].keys())
-        predicted_codes = {
-            sys: [r.code for r in results]
-            for sys, results in state["consolidated"].items()
-        }
+        seen_systems: list = []
+        for r in state["consolidated"]:
+            if r.system not in seen_systems:
+                seen_systems.append(r.system)
+        predicted_systems = seen_systems
+        codes_by_system: dict = {}
+        for r in state["consolidated"]:
+            codes_by_system.setdefault(r.system, []).append(r.code)
+        predicted_codes = codes_by_system
         api_calls = sum(
             len(a.planner_output.selected_systems)
             for a in state["attempt_history"]

@@ -76,24 +76,22 @@ def _fake_final_state() -> dict:
                 evaluator_output=evaluator_out,
             )
         ],
-        "consolidated": {
-            SystemName.ICD10CM: [
-                CodeResult(
-                    system=SystemName.ICD10CM,
-                    code="E11.9",
-                    display="Type 2 diabetes",
-                    score=1.0,
-                    raw={},
-                ),
-                CodeResult(
-                    system=SystemName.ICD10CM,
-                    code="E10.9",
-                    display="Type 1 diabetes",
-                    score=0.8,
-                    raw={},
-                ),
-            ]
-        },
+        "consolidated": [
+            CodeResult(
+                system=SystemName.ICD10CM,
+                code="E11.9",
+                display="Type 2 diabetes",
+                score=1.0,
+                raw={},
+            ),
+            CodeResult(
+                system=SystemName.ICD10CM,
+                code="E10.9",
+                display="Type 1 diabetes",
+                score=0.8,
+                raw={},
+            ),
+        ],
         "summary": "Found ICD-10-CM codes for diabetes.",
     }
 

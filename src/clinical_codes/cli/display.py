@@ -11,7 +11,7 @@ _NODE_LABELS: dict[str, str] = {
     "planner": "Searching...",
     "executor": "Evaluating...",
     "evaluator": "Consolidating...",
-    "consolidator": "Summarizing...",
+    "re_ranker": "Summarizing...",
 }
 
 
@@ -21,7 +21,7 @@ def update_status(status: Status, node_name: str) -> None:
 
 def render_results(
     console: Console,
-    consolidated: dict[SystemName, list[CodeResult]],
+    consolidated: list[CodeResult],
     search_terms: dict[SystemName, str],
     verbose: bool,
 ) -> None:
@@ -31,6 +31,7 @@ def render_results(
         return
 
     table = Table(show_header=True, header_style="bold")
+    table.add_column("#", style="dim")
     table.add_column("System")
     table.add_column("Code", style="cyan")
     table.add_column("Display")
@@ -38,13 +39,12 @@ def render_results(
     if verbose:
         table.add_column("Score", style="dim")
 
-    for system, results in consolidated.items():
-        term = search_terms.get(system, "")
-        for r in results:
-            row = [system.value, r.code, r.display, term]
-            if verbose:
-                row.append(f"{r.score:.2f}")
-            table.add_row(*row)
+    for i, r in enumerate(consolidated, 1):
+        term = search_terms.get(r.system, "")
+        row = [str(i), r.system.value, r.code, r.display, term]
+        if verbose:
+            row.append(f"{r.score:.2f}")
+        table.add_row(*row)
 
     console.print(table)
 

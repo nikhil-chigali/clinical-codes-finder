@@ -60,7 +60,7 @@ async def _run_async(
     graph = _get_graph()
     initial_state = make_initial_state(query)
 
-    consolidated: dict[SystemName, list[CodeResult]] = {}
+    consolidated: list = []
     attempt_history: list = []
     summary = ""
     summary_started = False
@@ -105,13 +105,10 @@ async def _run_async(
         result = {
             "query": query,
             "summary": summary,
-            "results": {
-                system.value: [
-                    {"code": r.code, "display": r.display, "score": r.score}
-                    for r in results
-                ]
-                for system, results in consolidated.items()
-            },
+            "results": [
+                {"system": r.system.value, "code": r.code, "display": r.display, "score": r.score}
+                for r in consolidated
+            ],
         }
         print(json.dumps(result, indent=2))
         return

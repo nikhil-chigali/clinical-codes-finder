@@ -156,7 +156,7 @@ def test_initial_state_shape() -> None:
         "raw_results": {},
         "evaluator_output": None,
         "attempt_history": [],
-        "consolidated": {},
+        "consolidated": [],
         "summary": "",
     }
     assert state["query"] == "diabetes"

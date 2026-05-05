@@ -84,7 +84,7 @@ Semantic filtering:
 - Keep codes that represent the right clinical entity in the right system, even if the specific method, specimen, or sub-classification differs from what you might expect.
 - Only exclude codes that are clearly from a different clinical category (e.g., a drug code appearing in lab results, a condition code where a measurement code is expected).
 - If all results for a system are in the correct domain, include all of them.
-- If a system returned results but all are from the wrong domain, include it in relevant_codes with an empty list [] — this signals the consolidator to remove all results for that system.
+- If a system returned results but all are from the wrong domain, include it in relevant_codes with an empty list [] — this signals the re_ranker to skip that system's codes.
 - Only omit a system from relevant_codes entirely if it returned no raw results at all.
 - Populating relevant_codes on "refine" ensures that if the iteration cap is hit and the pipeline proceeds anyway, the best available filtered set is used rather than the full unfiltered results."""
 
