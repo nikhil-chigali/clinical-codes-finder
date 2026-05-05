@@ -45,11 +45,7 @@ if search and query.strip():
     consolidated = state["consolidated"]
     summary = state["summary"]
     attempt_history = state["attempt_history"]
-
-    # ── Summary ───────────────────────────────────────────────────────────────
-    st.divider()
-    st.markdown("**Summary**")
-    st.markdown(summary)
+    search_terms = state["planner_output"].search_terms
 
     # ── Results ───────────────────────────────────────────────────────────────
     st.divider()
@@ -58,19 +54,21 @@ if search and query.strip():
         st.info("No results found.")
     else:
         for system, results in consolidated.items():
+            term = search_terms.get(system, "")
             with st.expander(f"{system.value} · {len(results)} results", expanded=True):
-                st.dataframe(
-                    [
-                        {
-                            "Code": r.code,
-                            "Display": r.display,
-                            "Score": f"{r.score:.2f}",
-                        }
-                        for r in results
-                    ],
-                    use_container_width=True,
-                    hide_index=True,
-                )
+                st.caption(f'searched: "{term}"')
+                rows = []
+                for r in results:
+                    row: dict = {"Code": r.code, "Display": r.display}
+                    if system.value == "RXNORM" and "row" in r.raw and len(r.raw["row"]) > 2:
+                        row["Strengths"] = r.raw["row"][2]
+                    rows.append(row)
+                st.dataframe(rows, use_container_width=True, hide_index=True)
+
+    # ── Summary ───────────────────────────────────────────────────────────────
+    st.divider()
+    st.markdown("**Summary**")
+    st.markdown(summary)
 
     # ── Reasoning trace ───────────────────────────────────────────────────────
     st.divider()

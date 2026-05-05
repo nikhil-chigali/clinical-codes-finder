@@ -121,34 +121,54 @@ def build_evaluator_messages(
     return [SystemMessage(content=_EVALUATOR_SYSTEM), HumanMessage(content=human)]
 
 
-_SUMMARIZER_SYSTEM = """You are a clinical information specialist. Write a clear, plain-English summary of the medical codes found for the given query. Your audience may be non-technical — a patient, student, or general clinician.
+_SUMMARIZER_SYSTEM = """You are a clinical information specialist. Write a single concise paragraph (3–5 sentences) summarizing what was found and why.
 
 Guidelines:
-- For each system, write one short paragraph: what the system covers, what was found, and why it was included.
-- Refer to results by display name. Include the code in brackets where clinically meaningful (e.g., ICD-10-CM and RxNorm codes are commonly referenced; UCUM units speak for themselves).
-- Define any medical term you use.
-- Do not mention systems that were not selected.
-- If no results were found across any system, return a polite refusal and suggest the user rephrase using a recognized clinical term."""
+- Base your summary strictly on the reasoning trace provided. Do not add clinical context from your own knowledge beyond what the trace supports.
+- State what the query is about, which systems were searched, and what was found.
+- If refinement occurred, briefly note what changed (e.g., a search term was revised after initial results were empty).
+- Do not repeat individual codes or list results by system — those are shown separately above.
+- If no results were found across any system, return a single sentence explaining this and suggesting the user rephrase using a recognized clinical term."""
+
+
+def _format_trace(attempt_history: list[Attempt]) -> str:
+    lines: list[str] = []
+    for attempt in attempt_history:
+        terms_str = ", ".join(
+            f'{s} ("{t}")' for s, t in attempt.planner_output.search_terms.items()
+        )
+        lines.append(f"  Iteration {attempt.iteration} — searched: {terms_str}")
+        for system, results in attempt.raw_results.items():
+            if results:
+                names = ", ".join(r.display for r in results[:3])
+                lines.append(f"    {system}: {len(results)} results — {names}")
+            else:
+                lines.append(f"    {system}: no results")
+        ev = attempt.evaluator_output
+        if ev.decision == "sufficient":
+            lines.append("    Evaluator: sufficient")
+        else:
+            lines.append(f"    Evaluator: refine — {ev.feedback}")
+    return "\n".join(lines)
 
 
 def build_summarizer_messages(
     query: str,
     consolidated: dict[SystemName, list[CodeResult]],
     rationale: str,
+    attempt_history: list[Attempt],
 ) -> list[BaseMessage]:
     result_lines: list[str] = []
     for system, results in consolidated.items():
         result_lines.append(f"  {system}:")
-        sliced = results[:5]
-        if sliced:
-            for r in sliced:
-                result_lines.append(f"    - {r.display} [{r.code}]")
-        else:
+        for r in results[:5]:
+            result_lines.append(f"    - {r.display} [{r.code}]")
+        if not results:
             result_lines.append("    (no results)")
 
     human = (
         f"Query: {query}\n\n"
-        f"Why these systems were selected: {rationale}\n\n"
-        f"Results:\n" + "\n".join(result_lines)
+        f"Reasoning trace:\n{_format_trace(attempt_history)}\n\n"
+        f"Final results:\n" + "\n".join(result_lines)
     )
     return [SystemMessage(content=_SUMMARIZER_SYSTEM), HumanMessage(content=human)]

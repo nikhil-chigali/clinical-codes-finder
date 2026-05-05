@@ -329,6 +329,6 @@ async def test_summarizer_writes_summary() -> None:
             result = await summarizer(
                 _make_state(planner_output=po, consolidated=consolidated)
             )
-            mock_build.assert_called_once_with("hypertension", consolidated, po.rationale)
+            mock_build.assert_called_once_with("hypertension", consolidated, po.rationale, [])
 
     assert result["summary"] == "Hypertension is a condition..."

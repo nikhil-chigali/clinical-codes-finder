@@ -115,7 +115,8 @@ async def _run_async(
         print(json.dumps(result, indent=2))
         return
 
-    render_results(console, consolidated, verbose=verbose)
+    search_terms = attempt_history[-1].planner_output.search_terms if attempt_history else {}
+    render_results(console, consolidated, search_terms, verbose=verbose)
 
     if verbose and attempt_history:
         console.print(Rule("Iterations"))

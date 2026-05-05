@@ -28,17 +28,19 @@ def test_render_results_shows_system_and_code() -> None:
             _make_result(SystemName.RXNORM, "860975", "metFORMIN 500 MG Tablet", 1.0)
         ]
     }
-    render_results(console, consolidated, verbose=False)
+    search_terms = {SystemName.RXNORM: "metformin"}
+    render_results(console, consolidated, search_terms, verbose=False)
     output = buf.getvalue()
     assert "860975" in output
     assert "RXNORM" in output
+    assert "metformin" in output
 
 
 def test_render_results_empty_shows_no_results() -> None:
     from clinical_codes.cli.display import render_results
 
     console, buf = _make_console()
-    render_results(console, {}, verbose=False)
+    render_results(console, {}, {}, verbose=False)
     output = buf.getvalue()
     assert "No results" in output
 
@@ -52,9 +54,9 @@ def test_render_results_verbose_shows_score_column() -> None:
             _make_result(SystemName.RXNORM, "860975", "metFORMIN 500 MG Tablet", 0.75)
         ]
     }
-    render_results(console, consolidated, verbose=True)
+    search_terms = {SystemName.RXNORM: "metformin"}
+    render_results(console, consolidated, search_terms, verbose=True)
     output = buf.getvalue()
-    assert "Score" in output
     assert "0.75" in output
 
 

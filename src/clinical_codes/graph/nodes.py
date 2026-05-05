@@ -105,6 +105,7 @@ async def summarizer(state: GraphState) -> dict:
         state["query"],
         state["consolidated"],
         state["planner_output"].rationale,
+        state["attempt_history"],
     )
     response = await _summarizer_llm.ainvoke(messages)
     return {"summary": response.content}

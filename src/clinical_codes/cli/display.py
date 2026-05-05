@@ -22,6 +22,7 @@ def update_status(status: Status, node_name: str) -> None:
 def render_results(
     console: Console,
     consolidated: dict[SystemName, list[CodeResult]],
+    search_terms: dict[SystemName, str],
     verbose: bool,
 ) -> None:
     console.print(Rule("Results"))
@@ -29,21 +30,20 @@ def render_results(
         console.print("[dim]No results[/dim]")
         return
 
-    table = Table(show_header=True, header_style="bold")
-    table.add_column("System")
-    table.add_column("Code")
-    table.add_column("Display")
-    if verbose:
-        table.add_column("Score")
-
     for system, results in consolidated.items():
-        for result in results:
-            row = [system.value, result.code, result.display]
+        term = search_terms.get(system, "")
+        console.print(f"\n[bold]{system.value}[/bold]  [dim]searched: \"{term}\"[/dim]")
+        table = Table(show_header=False, box=None, padding=(0, 2))
+        table.add_column("Code", style="cyan")
+        table.add_column("Display")
+        if verbose:
+            table.add_column("Score", style="dim")
+        for r in results:
+            row = [r.code, r.display]
             if verbose:
-                row.append(f"{result.score:.2f}")
+                row.append(f"{r.score:.2f}")
             table.add_row(*row)
-
-    console.print(table)
+        console.print(table)
 
 
 def render_error(console: Console, message: str, tb: str | None = None) -> None:
