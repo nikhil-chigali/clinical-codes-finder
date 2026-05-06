@@ -131,29 +131,29 @@ uv run python -m scripts.run_eval --gold data/gold/gold_v0.1.1.json
 
 The system is evaluated against a hand-curated gold set (`data/gold/gold_v0.1.1.json`) of 31 queries spanning five difficulty types: **simple** (one system, unambiguous), **multi-system** (legitimately spans 2+ systems), **ambiguous** (planner judgment call), **refinement** (designed to fail on first pass), and **miss** (out-of-scope / gibberish — agent should return empty).
 
-Results from eval run `20260503_104339` (gold v0.1.1, 0 errors):
+Results from eval run `20260506_123053` (gold v0.1.1, 0 errors):
 
 | Metric | Value | What it measures |
 |---|---|---|
-| System-selection F1 | 0.85 | Did the planner pick the right systems? |
-| Top-3 code recall | 0.42 | Did expected codes appear in the top 3? |
-| Must-include hit rate | 0.50 | Did canonically required codes appear? |
+| System-selection F1 | 0.92 | Did the planner pick the right systems? |
+| Top-3 code recall | 0.51 | Did expected codes appear in the top 3? |
+| Must-include hit rate | 0.75 | Did canonically required codes appear? |
 | Mean iterations / query | 1.23 | How often does refinement actually fire? |
-| Mean API calls / query | 1.23 | Cost proxy. Lower with better planning. |
+| Mean API calls / query | 1.65 | Cost proxy. Lower with better planning. |
 
 Sliced by query type:
 
 | Query type | N | System-selection F1 | Top-3 recall |
 |---|---|---|---|
-| simple | 11 | 0.91 | 0.64 |
-| multi_system | 8 | 0.72 | 0.21 |
-| ambiguous | 8 | 0.83 | 0.40 |
+| simple | 11 | 1.00 | 0.82 |
+| multi_system | 8 | 0.79 | 0.25 |
+| ambiguous | 8 | 0.92 | 0.42 |
 | refinement | 1 | 1.00 | 0.00 |
 | miss | 3 | 1.00 | n/a |
 
-**What improved:** System-selection F1 jumped from 0.69 → 0.85 (+23%) after two planner prompt improvements. First, the planner was given a conservative default of 1 system and explicit domain anchors (bare disease → ICD-10-CM, drug → RxNorm, lab test → LOINC, etc.), which fixed over-selection on simple queries: `"diabetes"`, `"hypertension"`, `"asthma"`, and `"CPAP machine"` all went from system_f1 0.50 → 1.0. Second, an instruction was added to return an empty selection for clearly non-clinical inputs, which fixed gibberish queries like `"asdfghjkl"` (system_f1 0.00 → 1.0). Mean API calls dropped from 3.10 → 1.23. (A prior iteration also added an RxNorm dose-string fallback — enabling queries like `"lisinopril 20 mg"` to match on drug+strength rather than returning zero results — which improved top-3 recall from 0.43 → 0.51. The current run's top-3 recall of 0.42 reflects the cost of conservative system selection, not a loss of the fallback.)
+**What improved:** System-selection F1 is now 0.92 and top-3 recall 0.51, up from 0.85 / 0.42 in the prior run. Simple queries hit system_f1 = 1.00 across the board. The evaluator semantic filter now correctly populates `relevant_codes` for carried-over systems on refinement iterations, preventing ICD-10-CM results from prior iterations from being dropped when the re-ranker pools results. The evaluator was also made less strict — it no longer triggers refinement when a system returns mostly on-domain results with a few stray codes (those are excluded via `relevant_codes`, not re-queried). Must-include hit rate recovered from 0.50 → 0.75 as a result.
 
-**Remaining gaps:** Top-3 recall (0.42) and must-include hit rate (0.50) regressed from the prior run (0.51 and 0.75 respectively) due to the conservative system selection — the planner now defaults to fewer systems, which helps precision but hurts recall on multi-system queries. The planner correctly selects systems for simple queries, but the specific expected codes rarely surface in the top 3, most pronounced in multi-system queries (top-3 recall 0.21). Multi-system cases where gold expects 3+ systems (q017 `"hypertension management"`, q018 `"diabetes management"`) remain under-recalled. Full results in `results/`.
+**Remaining gaps:** Multi-system top-3 recall (0.25) is the main weakness. Queries like `"hypertension management"` and `"diabetes management"` span 3+ systems and the planner's conservative defaults sometimes under-select, leaving expected codes unrepresented in the pool. Full results in `results/`.
 
 ---
 
