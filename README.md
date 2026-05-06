@@ -48,9 +48,9 @@ The pipeline is a LangGraph state machine. At its core is a tight **Planner → 
 
 **Evaluator** (LLM)
 - Applies a *clinical domain* standard — filters results that belong to a fundamentally different clinical category than what the query requires. Within-domain variation (different specimen type, test method, sub-classification) is kept; the API's own ranking handles relevance within a system. Example: a query for "ecoli" against LOINC accepts FISH assays, blood cultures, and urine cultures equally — all are E. coli lab tests. Only a cross-domain result (a drug code appearing in lab results) is filtered.
-- Runs a *result quality check*: does each system's results belong to the correct clinical domain for the query?
-- Runs a *coverage check*: is every meaningful component of the original query addressed by at least one selected system? A numeric quantity with no unit system, or a drug name with no RxNorm results, triggers refinement even if other systems returned strong results. On iteration 2+, the evaluator sees both current-iteration results and a "carried over" block of accumulated results from prior strong systems that weren't re-queried — coverage is assessed against the combined set.
-- Runs a *semantic filter*: populates `relevant_codes` — a per-system list of codes that match the clinical intent. Codes that mention the same entity but represent a different type of test or procedure are excluded. The re_ranker applies this filter before pooling. Populated on every pass (sufficient and refine), so if the iteration cap forces the pipeline forward, the best available filtered set is used.
+- Runs a *result quality check*: does each system's results belong to the correct clinical domain for the query? A system is sufficient if it returned at least one on-domain result — stray off-domain codes are excluded via `relevant_codes`, not used to trigger refinement.
+- Runs a *semantic filter*: populates `relevant_codes` — a per-system list of codes that match the clinical intent. The re_ranker applies this filter before pooling. Populated on every pass (sufficient and refine), so if the iteration cap forces the pipeline forward, the best available filtered set is used.
+- On iteration 2+, receives a "carried over" block showing accumulated results for systems not re-queried this iteration — so it can populate `relevant_codes` for those systems and form an accurate picture of what's available.
 - On refinement: provides a plain-English diagnosis of what's missing or mismatched, but does not prescribe what to do — the planner decides the remediation.
 - Outputs a binary decision (sufficient / refine), not a numeric score — LLMs are poor calibrators; a score of 0.7 carries no stable meaning across runs. The prose diagnosis in `feedback` is more actionable than any number would be.
 - Hard-capped at 2 iterations in graph state (not prompted into the LLM).
@@ -66,7 +66,6 @@ The pipeline is a LangGraph state machine. At its core is a tight **Planner → 
 - Writes a plain-English explanation for a non-technical reader — patient, student, or general clinician.
 - Covers what each selected system is, what was found, and why that system was relevant to the query.
 - Defines medical terms inline.
-- If the refinement cap fired and the pipeline was forced forward on a "refine" decision, explicitly calls out that the search was incomplete, names the evaluator's identified gap(s), and suggests rephrasing.
 
 ### Why this architecture, and not ReAct?
 
@@ -78,22 +77,6 @@ The instinct on agent assignments is to reach for ReAct (think → act → obser
 - **The loop is bounded (max 2 iterations).** Unbounded refinement is where agents go to die. The cap is enforced in graph state, not prompted into the LLM.
 
 Full trade-off analysis in [`docs/design-decisions.md`](docs/design-decisions.md).
-
----
-
-## Key design decisions
-
-**1. Merged planner — system selection and search terms in one LLM call**
-
-An earlier design split these into a separate router and planner. The problem: with separate nodes, the refinement loop could only revise search terms — it could never reconsider which systems were selected. If the router picked LOINC for "blood sugar test" and got weak results, the planner could only retry with different LOINC terms; it could never escalate to ICD-10-CM. Merging the two decisions into one call means refinement can correct both — the most impactful change for ambiguous queries.
-
-**2. Evaluator diagnoses, planner decides**
-
-The evaluator tells the planner *what went wrong* ("LOINC returned imaging codes for a drug query"), but never prescribes *what to do next*. That separation keeps the evaluator lightweight — it only needs to recognize a mismatch, not reason about clinical vocabulary. The planner, which already has full domain context in its system prompt, handles remediation. This makes both nodes easier to test and reason about independently.
-
-**3. Domain anchors with a tunable precision/recall dial**
-
-The planner prompt encodes explicit per-domain routing rules (bare disease → ICD-10-CM, drug → RxNorm, phenotypic trait → HPO, etc.) with a default of 1 system. This default is a deliberate business-level choice: a billing team needs high precision (only route when confident); a research team needs high recall (cast wide). The anchors and the multi-domain trigger threshold are the single place to tune that trade-off — no graph or code changes required.
 
 ---
 
