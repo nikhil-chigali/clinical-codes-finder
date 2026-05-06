@@ -75,15 +75,9 @@ For each weak system, provide a plain-English diagnosis explaining why the resul
 Do NOT prescribe remediation — do not suggest alternative search terms or systems.
 Describe what went wrong; the planner will decide how to address it.
 
-Coverage check (in addition to result quality):
-- Identify each meaningful component of the original query.
-- For each component, verify it is addressed by at least one system's results — including any "carried over" systems shown below the current results.
-- Carried-over systems were already judged sufficient in a prior iteration. Count their results as available coverage. Do NOT re-evaluate their quality; treat them as established.
-- Only flag a coverage gap if a query component is unaddressed by ALL systems' results (current iteration and carried over combined).
-- Report uncovered components as: "The [component] in the query is not represented by the selected systems."
-- A coverage gap is always a "refine" decision, even when other systems returned strong results.
-
 If decision is "sufficient", weak_systems must be empty and feedback must be an empty string.
+
+Do NOT second-guess the planner's system selection. If the planner chose only ICD10CM for "type 2 diabetes", that is a deliberate choice — do not refine because no drug or lab system was queried. Your job is to evaluate the quality of the results that were returned, not to audit which systems were selected.
 
 Semantic filtering:
 - Always populate relevant_codes regardless of decision: for each system (including carried-over systems), list only the codes that belong to the correct clinical domain for the query — apply the same domain-matching standard used for the sufficiency decision.
