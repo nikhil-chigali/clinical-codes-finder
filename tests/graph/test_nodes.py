@@ -83,7 +83,12 @@ async def test_re_ranker_small_pool_skips_llm() -> None:
 
     # Pool has (flat_results - 2) codes ≤ flat_results — returns as-is, no LLM call
     results = [_make_result(SystemName.ICD10CM, f"I{i:02d}", f"Result {i}") for i in range(settings.flat_results - 2)]
-    state = _make_state(raw_results={SystemName.ICD10CM: results})
+    state = _make_state(
+        evaluator_output=_make_evaluator_output(
+            relevant_codes={SystemName.ICD10CM: [r.code for r in results]}
+        ),
+        raw_results={SystemName.ICD10CM: results},
+    )
 
     with patch("clinical_codes.graph.nodes._re_ranker_chain") as mock_chain:
         result = await re_ranker(state)
@@ -98,7 +103,12 @@ async def test_re_ranker_calls_llm_for_large_pool() -> None:
 
     # Pool has (flat_results + 2) codes > flat_results — LLM called, top flat_results returned in order
     results = [_make_result(SystemName.ICD10CM, f"I{i:02d}", f"Result {i}") for i in range(settings.flat_results + 2)]
-    state = _make_state(raw_results={SystemName.ICD10CM: results})
+    state = _make_state(
+        evaluator_output=_make_evaluator_output(
+            relevant_codes={SystemName.ICD10CM: [r.code for r in results]}
+        ),
+        raw_results={SystemName.ICD10CM: results},
+    )
 
     top_codes = [RankedCode(system=SystemName.ICD10CM, code=f"I{i:02d}") for i in range(settings.flat_results)]
     mock_output = ReRankerOutput(ranked_codes=top_codes)
@@ -171,7 +181,12 @@ async def test_re_ranker_drops_invalid_llm_codes() -> None:
 
     # Pool has (flat_results + 2) codes — LLM path triggered. LLM returns a code not in pool → dropped.
     results = [_make_result(SystemName.ICD10CM, f"I{i:02d}", f"Result {i}") for i in range(settings.flat_results + 2)]
-    state = _make_state(raw_results={SystemName.ICD10CM: results})
+    state = _make_state(
+        evaluator_output=_make_evaluator_output(
+            relevant_codes={SystemName.ICD10CM: [r.code for r in results]}
+        ),
+        raw_results={SystemName.ICD10CM: results},
+    )
 
     ranked = [
         RankedCode(system=SystemName.ICD10CM, code="I00"),    # in pool
@@ -195,7 +210,12 @@ async def test_re_ranker_deduplicates_llm_output() -> None:
 
     # Pool has (flat_results + 2) codes — LLM path triggered. LLM returns I00 twice — second occurrence dropped.
     results = [_make_result(SystemName.ICD10CM, f"I{i:02d}", f"Result {i}") for i in range(settings.flat_results + 2)]
-    state = _make_state(raw_results={SystemName.ICD10CM: results})
+    state = _make_state(
+        evaluator_output=_make_evaluator_output(
+            relevant_codes={SystemName.ICD10CM: [r.code for r in results]}
+        ),
+        raw_results={SystemName.ICD10CM: results},
+    )
 
     ranked = [
         RankedCode(system=SystemName.ICD10CM, code="I00"),
@@ -210,6 +230,45 @@ async def test_re_ranker_deduplicates_llm_output() -> None:
     codes = [r.code for r in result["consolidated"]]
     assert codes.count("I00") == 1
     assert "I01" in codes
+
+
+async def test_re_ranker_includes_carried_over_system_results() -> None:
+    from clinical_codes.graph.nodes import re_ranker
+
+    # Iteration 2: planner only re-queried RxNorm (ICD10CM was strong in iter 1).
+    # planner_output.selected_systems = [RxNorm] only, but raw_results has both.
+    # evaluator saw both (carried-over block) and populated relevant_codes for both.
+    # re_ranker must pool ICD10CM results even though they're not in selected_systems.
+    icd_result = _make_result(SystemName.ICD10CM, "A15.0", "Tuberculosis of lung")
+    rx_result = _make_result(SystemName.RXNORM, "311166", "Isoniazid 300 MG Oral Tablet")
+
+    from clinical_codes.graph.state import PlannerOutput
+    planner_out = PlannerOutput(
+        selected_systems=[SystemName.RXNORM],  # ICD10CM omitted — planner dropped it
+        search_terms={SystemName.RXNORM: "isoniazid"},
+        rationale="RxNorm re-queried; ICD10CM was strong",
+    )
+    state = _make_state(
+        planner_output=planner_out,
+        evaluator_output=_make_evaluator_output(
+            relevant_codes={
+                SystemName.ICD10CM: ["A15.0"],
+                SystemName.RXNORM: ["311166"],
+            }
+        ),
+        raw_results={
+            SystemName.ICD10CM: [icd_result],
+            SystemName.RXNORM: [rx_result],
+        },
+    )
+
+    with patch("clinical_codes.graph.nodes._re_ranker_chain") as mock_chain:
+        result = await re_ranker(state)
+        mock_chain.ainvoke.assert_not_called()  # pool ≤ flat_results
+
+    codes = [r.code for r in result["consolidated"]]
+    assert "A15.0" in codes   # carried-over ICD10CM result present
+    assert "311166" in codes  # re-queried RxNorm result present
 
 
 # ── Planner ───────────────────────────────────────────────────────────────────

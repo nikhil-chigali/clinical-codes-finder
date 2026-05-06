@@ -100,15 +100,19 @@ async def re_ranker(state: GraphState) -> dict:
     ev = state["evaluator_output"]
     relevant = ev.relevant_codes if ev else {}
     raw = state["raw_results"]
-    selected = state["planner_output"].selected_systems if state["planner_output"] else []
 
-    # Build pool: apply domain filter per system, then flatten
+    # Pool from raw_results, gated by relevant_codes.
+    # relevant_codes is the authoritative list of which systems and codes the evaluator
+    # approved — including carried-over systems from prior iterations. Using it as the
+    # gate (rather than planner_output.selected_systems) prevents iteration-2 results
+    # from dropping systems the planner omitted from search_terms but didn't re-query.
+    # Systems absent from relevant_codes (never evaluated) are skipped.
     pool: list[CodeResult] = []
-    for system in selected:
-        results = raw.get(system, [])
-        # keep=None → no filter; keep=[] → remove all; non-empty → keep only those codes
-        keep = relevant.get(system, None)
-        if keep is not None:
+    for system, results in raw.items():
+        keep = relevant.get(system)  # None → not evaluated; [] → all excluded; list → filter
+        if keep is None:
+            continue
+        if keep:
             keep_set = set(keep)
             results = [r for r in results if r.code in keep_set]
         pool.extend(results)
