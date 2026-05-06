@@ -8,7 +8,7 @@ An agentic system that takes a natural-language clinical term and returns releva
 ![Tests](https://img.shields.io/badge/tests-112%20passing-brightgreen?logo=pytest&logoColor=white)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-> 🎬 **Demo video:** coming soon
+> 🎬 **Demo video:** [Watch on Loom](https://www.loom.com/share/14e85cc12fed4ae4b001382ee37fdb90)
 > 🚀 **Live demo:** [clinical-codes-finder.streamlit.app](https://clinical-codes-finder-igkg6rozbv48bl4t9fktjm.streamlit.app/)
 
 ---
