@@ -106,6 +106,45 @@ def test_evaluator_empty_results() -> None:
     assert "ICD10CM" in messages[1].content
 
 
+def test_evaluator_shows_carried_over_systems() -> None:
+    from clinical_codes.graph.prompts import build_evaluator_messages
+
+    # Iteration 2: ICD10CM was strong (carried over), only RXNORM re-queried
+    po = _planner_output(
+        systems=[SystemName.ICD10CM, SystemName.RXNORM],
+        terms={SystemName.RXNORM: "isoniazid"},  # ICD10CM omitted — carried over
+    )
+    raw = {
+        SystemName.ICD10CM: [_make_result(SystemName.ICD10CM, "Tuberculosis of lung", "A15.0")],
+        SystemName.RXNORM: [_make_result(SystemName.RXNORM, "Isoniazid (Oral Pill)", "311166")],
+    }
+    human = build_evaluator_messages("tuberculosis treatment", po, raw)[1].content
+
+    # Current-iteration system shown with search term
+    assert 'RXNORM (searched: "isoniazid")' in human
+    assert "[311166]" in human
+
+    # Carried-over system shown without a search term, labelled appropriately
+    assert "carried over" in human.lower()
+    assert "ICD10CM" in human
+    assert "[A15.0]" in human
+
+
+def test_evaluator_no_carried_over_block_on_first_pass() -> None:
+    from clinical_codes.graph.prompts import build_evaluator_messages
+
+    # All selected systems are in search_terms — no carried-over block expected
+    po = _planner_output(
+        systems=[SystemName.ICD10CM],
+        terms={SystemName.ICD10CM: "hypertension"},
+    )
+    raw = {SystemName.ICD10CM: [_make_result(SystemName.ICD10CM, "Essential hypertension", "I10")]}
+    human = build_evaluator_messages("hypertension", po, raw)[1].content
+
+    assert "carried over" not in human.lower()
+    assert "Already sufficient" not in human
+
+
 def test_evaluator_truncates_to_five() -> None:
     from clinical_codes.graph.prompts import build_evaluator_messages
 

@@ -72,15 +72,16 @@ Describe what went wrong; the planner will decide how to address it.
 
 Coverage check (in addition to result quality):
 - Identify each meaningful component of the original query.
-- For each component, verify it is addressed by at least one selected system and reflected in the results.
-- If a component is not captured — for example, a numeric value in the query but no quantitative unit system selected, or a drug name present but no RxNorm results — flag it as a coverage gap.
+- For each component, verify it is addressed by at least one system's results — including any "carried over" systems shown below the current results.
+- Carried-over systems were already judged sufficient in a prior iteration. Count their results as available coverage. Do NOT re-evaluate their quality; treat them as established.
+- Only flag a coverage gap if a query component is unaddressed by ALL systems' results (current iteration and carried over combined).
 - Report uncovered components as: "The [component] in the query is not represented by the selected systems."
 - A coverage gap is always a "refine" decision, even when other systems returned strong results.
 
 If decision is "sufficient", weak_systems must be empty and feedback must be an empty string.
 
 Semantic filtering:
-- Always populate relevant_codes regardless of decision: for each system, list only the codes that belong to the correct clinical domain for the query — apply the same domain-matching standard used for the sufficiency decision.
+- Always populate relevant_codes regardless of decision: for each system (including carried-over systems), list only the codes that belong to the correct clinical domain for the query — apply the same domain-matching standard used for the sufficiency decision.
 - Keep codes that represent the right clinical entity in the right system, even if the specific method, specimen, or sub-classification differs from what you might expect.
 - Only exclude codes that are clearly from a different clinical category (e.g., a drug code appearing in lab results, a condition code where a measurement code is expected).
 - If all results for a system are in the correct domain, include all of them.
@@ -133,9 +134,9 @@ def build_evaluator_messages(
     planner_output: PlannerOutput,
     raw_results: dict[SystemName, list[CodeResult]],
 ) -> list[BaseMessage]:
-    # search_terms is the authoritative source for iteration — it covers every system
-    # the planner selected AND has a term for, which is what the executor will query.
     result_lines: list[str] = []
+
+    # Systems searched this iteration
     for system, term in planner_output.search_terms.items():
         results = raw_results.get(system, [])[:5]
         result_lines.append(f'  {system} (searched: "{term}"):')
@@ -144,6 +145,24 @@ def build_evaluator_messages(
                 result_lines.append(f"    {i}. [{r.code}] {r.display}")
         else:
             result_lines.append("    (no results)")
+
+    # Systems selected but not re-queried — carried over because they were strong last iteration.
+    # Show their accumulated results so the evaluator can count them for the coverage check.
+    carried = [
+        s for s in planner_output.selected_systems
+        if s not in planner_output.search_terms
+    ]
+    if carried:
+        result_lines.append("")
+        result_lines.append("  Already sufficient — not re-queried this iteration:")
+        for system in carried:
+            results = raw_results.get(system, [])[:5]
+            result_lines.append(f"  {system} (carried over):")
+            if results:
+                for i, r in enumerate(results, 1):
+                    result_lines.append(f"    {i}. [{r.code}] {r.display}")
+            else:
+                result_lines.append("    (no results)")
 
     terms_str = ", ".join(
         f'{system}: "{term}"' for system, term in planner_output.search_terms.items()
