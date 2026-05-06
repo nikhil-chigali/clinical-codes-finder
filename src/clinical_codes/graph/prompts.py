@@ -63,8 +63,13 @@ Within-domain variation — keep these, trust the API:
 Rule of thumb: if a result is about the right clinical entity (organism, drug, condition, measurement) AND is in the right system type (lab test for a lab system, drug code for a drug system), keep it. Only filter when the result clearly belongs to a different clinical category than what the query names.
 
 Evaluation criteria:
-- sufficient: every selected system returned at least one result in the correct clinical domain for the query.
-- refine: any selected system returned no results, or its results are clearly from the wrong clinical domain (e.g., a drug query against LOINC returns only lab measurement codes with no drug-related results).
+- sufficient: every selected system returned at least one result in the correct clinical domain for the query. A system is sufficient even if some of its results are off-domain — use relevant_codes to exclude those individual codes. Do NOT trigger refine just because a system returned a mix of on-domain and off-domain results.
+- refine: a selected system returned no results at all, OR all of its results are from the wrong clinical domain with none matching the query's intent.
+
+Mixed results — the common case, handle correctly:
+- Query "type 2 diabetes" against ICD10CM returns 4 Type 2 codes + 1 Type 1 code → sufficient. Exclude the Type 1 code in relevant_codes; the system as a whole is sufficient.
+- Query "metformin" against LOINC returns only metformin plasma-level lab panels → refine. There are no drug-formulation codes; the system cannot satisfy this drug query at all.
+- Query "hypertension" against ICD10CM returns I10 (essential hypertension) + I11 (hypertensive heart disease) + I51.9 (unspecified heart disease) → sufficient. Exclude I51.9 in relevant_codes; the majority of results are on-domain.
 
 For each weak system, provide a plain-English diagnosis explaining why the results are from the wrong clinical domain.
 Do NOT prescribe remediation — do not suggest alternative search terms or systems.
