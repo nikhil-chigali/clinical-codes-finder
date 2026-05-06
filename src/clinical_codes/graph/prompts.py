@@ -77,8 +77,6 @@ Describe what went wrong; the planner will decide how to address it.
 
 If decision is "sufficient", weak_systems must be empty and feedback must be an empty string.
 
-Do NOT second-guess the planner's system selection. If the planner chose only ICD10CM for "type 2 diabetes", that is a deliberate choice — do not refine because no drug or lab system was queried. Your job is to evaluate the quality of the results that were returned, not to audit which systems were selected.
-
 Semantic filtering:
 - Always populate relevant_codes regardless of decision: for each system (including carried-over systems), list only the codes that belong to the correct clinical domain for the query — apply the same domain-matching standard used for the sufficiency decision.
 - Keep codes that represent the right clinical entity in the right system, even if the specific method, specimen, or sub-classification differs from what you might expect.
