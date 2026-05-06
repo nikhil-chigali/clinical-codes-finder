@@ -76,7 +76,7 @@ Refinement is triggered if **any** planner-selected system meets either conditio
 
 Within-domain variation is kept: a query for "ecoli" against LOINC accepts FISH assays, blood culture assays, and urine culture assays equally — they are all E. coli lab tests. Sub-type distinctions are for the user, not the evaluator.
 
-**Coverage check:** if any meaningful component of the query is unrepresented by any selected system, that is always a refine decision — even if other systems returned strong results.
+**Coverage check:** if any meaningful component of the query is unrepresented by any selected system, that is always a refine decision — even if other systems returned strong results. On iteration 2+, the evaluator sees both current-iteration results and accumulated results from prior-iteration strong systems (shown as "carried over"). Coverage is assessed against the combined set — a component covered by a carried-over system is not a gap.
 
 **Semantic filter (`relevant_codes`):** on every pass (sufficient *and* refine), the evaluator lists per system which specific codes belong to the correct clinical domain. The re_ranker applies this filter before pooling. An empty list for a system removes all its results. This ensures that if the iteration cap fires and the pipeline is forced forward on a "refine" decision, the best available filtered set is used rather than all raw results.
 

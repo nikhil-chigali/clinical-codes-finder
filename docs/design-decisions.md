@@ -31,7 +31,7 @@ Captures the key architectural decisions made during design sessions, with ratio
 1. A selected system returned zero results.
 2. A selected system returned results that, on semantic inspection, don't appear relevant to the query (e.g., a drug query against LOINC returns imaging panel codes).
 
-**Evaluator human message format:** Top 5 result display names per system (not counts, not scores). The LLM reads display names to assess semantic relevance — this is where it adds value that a threshold check cannot.
+**Evaluator human message format:** Top 5 results (code + display) per system. The LLM reads display names to assess semantic relevance — this is where it adds value that a threshold check cannot. On iteration 2+, the evaluator also receives a "carried over" block showing accumulated results for systems that returned strong results in a prior iteration and were not re-queried. Carried-over results count for coverage purposes but are not re-evaluated for quality (see §12).
 
 **Evaluator `feedback` field:** Plain-English diagnosis per weak system. Examples:
 - "LOINC returned no results for 'metformin' — this system covers lab tests, not drug names."
@@ -221,3 +221,19 @@ The current implementation embeds system descriptions directly in the planner pr
 **`consolidated` state field:** type changed from `dict[SystemName, list[CodeResult]]` to `list[CodeResult]`. System is still a field on each `CodeResult`, so all downstream consumers (summarizer, UI) access it via `r.system` — no grouped dict needed.
 
 **Trade-off:** The re_ranker adds one LLM call per query when the pool is larger than `flat_results`. This is acceptable: it fires only after the evaluator has already made a sufficient/refine decision (1–2 LLM calls), and it replaces a deterministic step that provided no query-relevance signal. The short-circuit paths keep miss queries and simple single-result queries at zero additional cost.
+
+---
+
+## 12. Evaluator context — carried-over systems on refinement iterations
+
+**Decision:** On iteration 2+, `build_evaluator_messages` appends a "Already sufficient — not re-queried this iteration" block to the human message, showing the top-5 accumulated results for every system in `selected_systems` that was omitted from the current `search_terms`. The evaluator prompt instructs the model to count these results as established coverage without re-evaluating their quality.
+
+**The problem:** When the planner omits a strong system from `search_terms` on iteration 2 (because its results were sufficient in iteration 1), `build_evaluator_messages` previously only iterated over `search_terms` — leaving the evaluator with no visibility into that system's accumulated results. The evaluator's coverage check then flagged the omitted system as unrepresented and returned "refine," causing a false cap-hit. Concrete cases: "tuberculosis treatment" (ICD-10-CM results already strong, omitted from iter 2's `search_terms` → evaluator wrongly said "disease component uncovered"), "anemia workup" (same pattern with ICD-10-CM).
+
+**Why this is a prompt-context problem, not a state problem:** `state["raw_results"]` already contains accumulated results from all iterations (the executor merges with `dict(state["raw_results"])` each pass). The data was present; the evaluator prompt simply wasn't showing it.
+
+**Why not just pass all `raw_results` without the "carried over" label:** The evaluator needs to distinguish current-iteration results (which it must evaluate for quality) from prior-iteration results (which are established and should only count for coverage). Merging them without a label would cause the evaluator to re-evaluate the quality of carried-over results, potentially downgrading them and triggering another false refine.
+
+**Effect:** Queries like "tuberculosis treatment" and "anemia workup" now exit iteration 2 with "sufficient" instead of cap-hitting. These queries still require 2 iterations (the first pass legitimately has empty results that need refinement), but the second pass resolves cleanly. Mean API calls across the gold set: 1.68 → 1.55.
+
+**The `relevant_codes` output for carried-over systems:** The evaluator is instructed to populate `relevant_codes` for carried-over systems using the same domain standard as always. This ensures the re_ranker can apply domain filtering even for systems not re-queried in the final iteration, rather than passing their results through unfiltered.
