@@ -194,27 +194,20 @@ def test_summarizer_truncates_to_five() -> None:
     assert "Result 5" not in human  # 6th result excluded
 
 
-def test_build_summarizer_cap_hit_note_present() -> None:
+def test_build_summarizer_no_cap_hit_note() -> None:
     from clinical_codes.graph.prompts import build_summarizer_messages
 
-    # _attempt() has decision="refine" — simulates iteration cap firing
-    attempt = _attempt()
-    human = build_summarizer_messages("hypertension", [], "rationale", [attempt])[1].content
-    assert "Cap-hit" in human
-    assert "LOINC returned no results for this drug query" in human
-
-
-def test_build_summarizer_no_cap_hit_when_sufficient() -> None:
-    from clinical_codes.graph.prompts import build_summarizer_messages
-
-    attempt = Attempt(
-        iteration=1,
-        planner_output=_planner_output(),
-        raw_results={},
-        evaluator_output=_evaluator_output(decision="sufficient"),
-    )
-    human = build_summarizer_messages("hypertension", [], "rationale", [attempt])[1].content
-    assert "Cap-hit" not in human
+    # Cap-hit language is never injected regardless of evaluator decision
+    for decision in ("refine", "sufficient"):
+        attempt = Attempt(
+            iteration=1,
+            planner_output=_planner_output(),
+            raw_results={},
+            evaluator_output=_evaluator_output(decision=decision, feedback="some feedback"),
+        )
+        human = build_summarizer_messages("hypertension", [], "rationale", [attempt])[1].content
+        assert "Cap-hit" not in human
+        assert "refinement limit" not in human
 
 
 def test_build_re_ranker_messages() -> None:
