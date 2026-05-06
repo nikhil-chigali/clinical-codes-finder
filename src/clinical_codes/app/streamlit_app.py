@@ -58,20 +58,13 @@ if search and query.strip():
         rows = []
         for i, r in enumerate(consolidated, 1):
             term = search_terms.get(r.system, "")
-            row: dict = {
+            rows.append({
                 "Rank": i,
                 "System": r.system.value,
                 "Code": r.code,
                 "Display": r.display,
                 "Searched as": term,
-            }
-            strengths = (
-                r.raw["row"][2]
-                if r.system == SystemName.RXNORM and "row" in r.raw and len(r.raw["row"]) > 2
-                else ""
-            )
-            row["Strengths"] = strengths
-            rows.append(row)
+            })
         st.dataframe(rows, use_container_width=True, hide_index=True)
 
     # ── Summary ───────────────────────────────────────────────────────────────
